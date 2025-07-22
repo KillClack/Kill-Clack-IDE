@@ -3,20 +3,21 @@
  *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
  *--------------------------------------------------------------------------------------*/
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 import DailyIframe, {
   DailyCall,
   DailyEventObjectAppMessage,
 } from '@daily-co/daily-js';
-
-import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react';
-import { useAccessor, useChatThreadsState, useChatThreadsStreamState } from '../util/services.js';
-import { SelectedFiles } from '../sidebar-tsx/SidebarChat.js';
+import { useIsDark } from '../util/services.js';
+import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown } from 'lucide-react';
+import { useAccessor, useChatThreadsState, useChatThreadsStreamState, useSettingsState } from '../util/services.js';
+import { SelectedFiles, builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons } from '../sidebar-tsx/SidebarChat.js';
 import { ChatMarkdownRender, ChatMessageLocation } from '../markdown/ChatMarkdownRender.js';
 import { ChatMessage, ToolMessage } from '../../../../common/chatThreadServiceTypes.js';
-import { ToolName } from '../../../../common/toolsServiceTypes.js';
-// Import removed - we'll define the tool approval component inline
+import { BuiltinToolName } from '../../../../common/toolsServiceTypes.js';
+import { isABuiltinToolName} from '../../../../common/prompt/prompts.js';
+import { displayInfoOfProviderName } from '../../../../../../../workbench/contrib/void/common/voidSettingsTypes.js';
 import '../styles.css';
 
 export type VoiceChatProps = {
@@ -33,6 +34,7 @@ export const VoiceChat = (props: VoiceChatProps) => {
 	} = props
   const accessor = useAccessor();
   const chatThreadsService = accessor.get('IChatThreadService');
+  const settingsState = useSettingsState();
 
   // Get current thread data
   const chatThreadsState = useChatThreadsState();
@@ -47,57 +49,31 @@ export const VoiceChat = (props: VoiceChatProps) => {
   const [participants, setParticipants] = useState<Record<string, any>>({});
   const [messages, setMessages] = useState<Array<{from: string, text: string, timestamp: Date}>>([]);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
 
   // Refs
   const callObjectRef = useRef<DailyCall | null>(null);
-  // Tool approval component (extracted from SidebarChat)
-  const ToolRequestAcceptRejectButtons = ({ toolName }: { toolName: ToolName }) => {
-    const chatThreadsService = accessor.get('IChatThreadService');
-    const metricsService = accessor.get('IMetricsService');
-
-    const onAccept = useCallback(() => {
-      try {
-        const threadId = chatThreadsService.state.currentThreadId;
-        chatThreadsService.approveLatestToolRequest(threadId);
-        metricsService.capture('Tool Request Accepted', {});
-      } catch (e) {
-        console.error('Error while approving message in chat:', e);
-      }
-    }, [chatThreadsService, metricsService]);
-
-    const onReject = useCallback(() => {
-      try {
-        const threadId = chatThreadsService.state.currentThreadId;
-        chatThreadsService.rejectLatestToolRequest(threadId);
-        metricsService.capture('Tool Request Rejected', {});
-      } catch (e) {
-        console.error('Error while rejecting message in chat:', e);
-      }
-    }, [chatThreadsService, metricsService]);
-
-    return (
-      <div className="flex gap-2 items-center">
-        <button
-          onClick={onAccept}
-          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors"
-        >
-          Approve
-        </button>
-        <button
-          onClick={onReject}
-          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  };
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollHeight = useRef<number>(0);
 
   const keepAliveRef = useRef<{ status: string; lastTime: number }>({
     status: 'OK',
     lastTime: 0,
   });
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Current settings display (read-only)
+  const currentChatMode = settingsState.globalSettings.chatMode;
+  const currentModelSelection = settingsState.modelSelectionOfFeature.Chat;
+
+  const chatModeDisplay = {
+    'normal': 'Chat',
+    'gather': 'Gather',
+    'agent': 'Agent',
+  }[currentChatMode];
+
+  const modelDisplay = currentModelSelection
+    ? `${currentModelSelection.modelName} (${displayInfoOfProviderName(currentModelSelection.providerName).title})`
+    : 'No model selected';
 
   // Get the most recent assistant message
   const mostRecentAssistantMessage = useMemo(() => {
@@ -131,8 +107,30 @@ export const VoiceChat = (props: VoiceChatProps) => {
     const toolMessages = currentThread.messages.filter(msg =>
       msg.role === 'tool' && msg.type === 'tool_request'
     );
-    return toolMessages.length > 0 ? toolMessages[toolMessages.length - 1] as ToolMessage<any> : null;
+    return toolMessages.length > 0 ? {
+      message: toolMessages[toolMessages.length - 1] as ToolMessage<any>,
+      messageIdx: currentThread.messages.findLastIndex(msg => msg.role === 'tool' && msg.type === 'tool_request')
+    } : null;
   }, [currentThread.messages]);
+
+  // Auto-scroll to bottom function
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    }
+  }, []);
+
+  // Handle scroll events to detect user scrolling
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+    setIsUserScrolling(!isAtBottom);
+  }, []);
 
   // Initialize Daily call
   const initializeCall = useCallback(async () => {
@@ -176,7 +174,7 @@ export const VoiceChat = (props: VoiceChatProps) => {
       console.error('Failed to initialize call:', error);
       setIsConnecting(false);
     }
-  }, [isConnecting, isConnected]);
+  }, [isConnecting, isConnected, roomUrl, token, userName]);
 
   // Handle app messages
   const handleAppMessage = useCallback((event: DailyEventObjectAppMessage) => {
@@ -262,7 +260,48 @@ export const VoiceChat = (props: VoiceChatProps) => {
     }, 5000);
 
     return () => clearInterval(intervalId);
-  }, [isConnected, callObject]);
+  }, [isConnected, callObject, userName]);
+
+  // Detect content changes and scroll to bottom
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Check if content height changed
+    if (container.scrollHeight !== lastScrollHeight.current) {
+      lastScrollHeight.current = container.scrollHeight;
+
+      // Only auto-scroll if user isn't manually scrolling
+      if (!isUserScrolling) {
+        scrollToBottom();
+      }
+    }
+  }, [
+    mostRecentAssistantMessage,
+    streamingMessage,
+    latestToolRequest,
+    messages,
+    scrollToBottom,
+    isUserScrolling
+  ]);
+
+  // Handle parent resize events
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Add scroll listener
+    container.addEventListener('scroll', handleScroll);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [handleScroll]);
+
+  // Initial scroll on mount
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [scrollToBottom]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {
@@ -341,70 +380,112 @@ export const VoiceChat = (props: VoiceChatProps) => {
     );
   };
 
-  return (
-    <div className="@@void-scope h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-1 bg-void-bg-2 text-void-fg-1 text-xs border-b border-void-border-3 flex-shrink-0">
-        {/* Status indicator */}
-        <div className="flex items-center gap-1">
-          <div className={`w-2 h-2 rounded-full ${
-            isConnected ? 'bg-green-500' :
-            isConnecting ? 'bg-yellow-500 animate-pulse' :
-            'bg-gray-500'
-          }`} />
-          <span className="font-medium">Cody Voice</span>
-        </div>
+  // Render tool request with full details (same logic as SidebarChat)
+  const renderToolRequest = (toolMessage: ToolMessage<any>, messageIdx: number) => {
+    const toolName = toolMessage.name;
+    const isBuiltInTool = isABuiltinToolName(toolName);
+    const ToolResultWrapper = isBuiltInTool
+      ? builtinToolNameToComponent[toolName as BuiltinToolName]?.resultWrapper as any
+      : MCPToolWrapper as any;
 
-        {/* Connection status */}
-        <span className="text-void-fg-3">
-          {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-        </span>
+    if (!ToolResultWrapper) return null;
 
-        {/* Participant count */}
-        {isConnected && (
-          <span className="text-void-fg-3">
-            {Object.keys(participants).length} participant{Object.keys(participants).length !== 1 ? 's' : ''}
-          </span>
-        )}
+    return (
+      <div className="space-y-2">
+        {/* Show the tool request details using the same wrapper as SidebarChat */}
+        <ToolResultWrapper
+          toolMessage={toolMessage}
+          messageIdx={messageIdx}
+          threadId={currentThread.id}
+        />
 
-        {/* Messages indicator */}
-        {messages.length > 0 && (
-          <div className="flex items-center gap-1 text-void-fg-3">
-            <Volume2 size={12} />
-            <span>{messages.length} messages</span>
-          </div>
-        )}
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Controls */}
-        <div className="flex items-center gap-1">
-          {isConnected && (
-            <button
-              onClick={toggleMute}
-              className="p-1 rounded hover:bg-void-bg-3 transition-colors"
-              title={isMuted ? 'Unmute' : 'Mute'}
-            >
-              {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
-            </button>
-          )}
-
-          <button
-            onClick={isConnected ? disconnect : initializeCall}
-            disabled={isConnecting}
-            className={`p-1 rounded transition-colors ${
-              isConnected ? 'hover:bg-red-500/20 text-red-500' : 'hover:bg-green-500/20 text-green-500'
-            } disabled:opacity-50`}
-            title={isConnected ? 'Disconnect' : 'Connect'}
-          >
-            {isConnected ? <PhoneOff size={14} /> : <Phone size={14} />}
-          </button>
+        {/* Show the accept/reject buttons */}
+        <div className="flex justify-center">
+          <ToolRequestAcceptRejectButtons toolName={toolName} />
         </div>
       </div>
+    );
+  };
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+  const isDark = useIsDark()
+
+  return (
+    <div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ width: '100%', height: '100%' }}>
+      <div className="w-full h-full flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-void-bg-2 text-void-fg-1 text-xs border-b border-void-border-3">
+          {/* Left side - Status and connection info */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Status indicator */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <div className={`w-2 h-2 rounded-full ${
+                isConnected ? 'bg-green-500' :
+                isConnecting ? 'bg-yellow-500 animate-pulse' :
+                'bg-gray-500'
+              }`} />
+              <span className="font-medium">Cody Voice</span>
+            </div>
+
+            {/* Connection status */}
+            <span className="text-void-fg-3 flex-shrink-0">
+              {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
+            </span>
+
+            {/* Participant count */}
+            {isConnected && (
+              <span className="text-void-fg-3 flex-shrink-0">
+                {Object.keys(participants).length} participant{Object.keys(participants).length !== 1 ? 's' : ''}
+              </span>
+            )}
+
+            {/* Messages indicator */}
+            {messages.length > 0 && (
+              <div className="flex items-center gap-1 text-void-fg-3 flex-shrink-0">
+                <Volume2 size={12} />
+                <span>{messages.length} messages</span>
+              </div>
+            )}
+          </div>
+
+          {/* Center - Current settings display (read-only) */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="text-xs text-void-fg-3 bg-void-bg-1 border border-void-border-2 rounded py-0.5 px-1">
+              {chatModeDisplay}
+            </div>
+            <div className="text-xs text-void-fg-3 bg-void-bg-1 rounded py-0.5 px-1" title={modelDisplay}>
+              {currentModelSelection ?
+                `${currentModelSelection.modelName.length > 12 ?
+                  currentModelSelection.modelName.substring(0, 12) + '...' :
+                  currentModelSelection.modelName}`
+                : 'No model'}
+            </div>
+          </div>
+
+          {/* Right side - Controls */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {isConnected && (
+              <button
+                onClick={toggleMute}
+                className="p-1 rounded hover:bg-void-bg-3 transition-colors"
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+              </button>
+            )}
+
+            <button
+              onClick={isConnected ? disconnect : initializeCall}
+              disabled={isConnecting}
+              className={`p-1 rounded transition-colors ${
+                isConnected ? 'hover:bg-red-500/20 text-red-500' : 'hover:bg-green-500/20 text-green-500'
+              } disabled:opacity-50`}
+              title={isConnected ? 'Disconnect' : 'Connect'}
+            >
+              {isConnected ? <PhoneOff size={14} /> : <Phone size={14} />}
+            </button>
+          </div>
+        </div>
+
         {/* Staging selections */}
         {selections && selections.length > 0 && (
           <div className="px-3 py-2 border-b border-void-border-3 bg-void-bg-1">
@@ -417,38 +498,63 @@ export const VoiceChat = (props: VoiceChatProps) => {
           </div>
         )}
 
-        {/* Messages container - scrollable */}
-        <div
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto p-3 space-y-4"
-        >
-          {/* Show streaming message if available */}
-          {streamingMessage ? (
-            renderMessageContent(streamingMessage, -1, true)
-          ) : (
-            /* Show most recent assistant message */
-            mostRecentAssistantMessage && renderMessageContent(
-              mostRecentAssistantMessage.message,
-              mostRecentAssistantMessage.messageIdx,
-              false
-            )
-          )}
+        {/* Messages container - fills remaining space */}
+        <div className="w-full h-full overflow-hidden relative">
+          <div
+            ref={messagesContainerRef}
+            onScroll={handleScroll}
+            className="w-full h-full p-3 space-y-4 overflow-y-auto"
+            style={{
+              scrollbarWidth: 'none', // Firefox
+              msOverflowStyle: 'none', // IE/Edge
+            }}
+          >
+            {/* Hide webkit scrollbars */}
+            <style>{`
+              .overflow-y-auto::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
 
-          {/* Tool request approval if needed */}
-          {latestToolRequest && (
-            <div className="mt-4 p-3 bg-void-bg-3 rounded border border-void-border-2">
-              <div className="text-sm text-void-fg-2 mb-2">
-                Tool approval required: {latestToolRequest.name}
+            {/* Show streaming message if available */}
+            {streamingMessage ? (
+              renderMessageContent(streamingMessage, -1, true)
+            ) : (
+              /* Show most recent assistant message */
+              mostRecentAssistantMessage && renderMessageContent(
+                mostRecentAssistantMessage.message,
+                mostRecentAssistantMessage.messageIdx,
+                false
+              )
+            )}
+
+            {/* Tool request approval with full details */}
+            {latestToolRequest && (
+              <div className="mt-4 p-3 bg-void-bg-3 rounded border border-void-border-2">
+                <div className="text-sm text-void-fg-2 mb-3 font-medium">
+                  Tool approval required:
+                </div>
+                {renderToolRequest(latestToolRequest.message, latestToolRequest.messageIdx)}
               </div>
-              <ToolRequestAcceptRejectButtons toolName={latestToolRequest.name} />
-            </div>
-          )}
+            )}
 
-          {/* Show message if no assistant messages */}
-          {!mostRecentAssistantMessage && !streamingMessage && (
-            <div className="text-center text-void-fg-3 text-sm py-8">
-              No assistant messages yet. Start a conversation in the main chat.
-            </div>
+            {/* Show message if no assistant messages */}
+            {!mostRecentAssistantMessage && !streamingMessage && (
+              <div className="text-center text-void-fg-3 text-sm py-8">
+                No assistant messages yet. Start a conversation in the main chat.
+              </div>
+            )}
+          </div>
+
+          {/* Scroll to bottom button */}
+          {isUserScrolling && (
+            <button
+              onClick={() => scrollToBottom()}
+              className="absolute bottom-2 right-2 p-2 bg-void-bg-3 hover:bg-void-bg-4 rounded-full shadow-lg border border-void-border-2 transition-all"
+              title="Scroll to bottom"
+            >
+              <ChevronDown size={16} />
+            </button>
           )}
         </div>
       </div>
