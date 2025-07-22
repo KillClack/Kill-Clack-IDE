@@ -260,7 +260,7 @@ const detailOfChatMode = {
 }
 
 
-const ChatModeDropdown = ({ className }: { className: string }) => {
+export const ChatModeDropdown = ({ className }: { className: string }) => {
 	const accessor = useAccessor()
 
 	const voidSettingsService = accessor.get('IVoidSettingsService')

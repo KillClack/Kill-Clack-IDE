@@ -4,15 +4,16 @@
  *--------------------------------------------------------------------------------------*/
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-
+import { ModelDropdown } from '../void-settings-tsx/ModelDropdown.js';
+import { ChatModeDropdown } from '../sidebar-tsx/SidebarChat.js';
 import DailyIframe, {
   DailyCall,
   DailyEventObjectAppMessage,
 } from '@daily-co/daily-js';
 import { useIsDark } from '../util/services.js';
-import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X, Square, Plus, Settings } from 'lucide-react';
 import { useAccessor, useChatThreadsState, useChatThreadsStreamState, useSettingsState } from '../util/services.js';
-import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, IconLoading, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
+import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, voidOpenFileFn, IconLoading, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
 import { ChatMarkdownRender, ChatMessageLocation } from '../markdown/ChatMarkdownRender.js';
 import { StagingSelectionItem } from '../../../../common/chatThreadServiceTypes.js';
 import { File, Folder, Text } from 'lucide-react';
@@ -20,6 +21,8 @@ import { ChatMessage, ToolMessage } from '../../../../common/chatThreadServiceTy
 import { BuiltinToolName } from '../../../../common/toolsServiceTypes.js';
 import { isABuiltinToolName} from '../../../../common/prompt/prompts.js';
 import { displayInfoOfProviderName } from '../../../../../../../workbench/contrib/void/common/voidSettingsTypes.js';
+import { VOID_OPEN_SETTINGS_ACTION_ID } from '../../../voidSettingsPane.js';
+import { VOID_CMD_SHIFT_L_ACTION_ID } from '../../../sidebarActions.js';
 import '../styles.css';
 
 export type VoiceChatProps = {
@@ -78,7 +81,16 @@ const VoiceChatSelectedFiles = ({ selections, setSelections }: {
                 hover:border-void-border-1
                 transition-all duration-150
                 cursor-pointer
-              `}>
+              `}
+              onClick={() => {
+                if (selection.type === 'File') {
+                  voidOpenFileFn(selection.uri, accessor);
+                } else if (selection.type === 'CodeSelection') {
+                  voidOpenFileFn(selection.uri, accessor, selection.range);
+                } else if (selection.type === 'Folder') {
+                  // TODO: reveal in tree (same as SidebarChat)
+                }
+              }}>
                 {<SelectionIcon size={10} />}
                 {getBasename(selection.uri.fsPath) +
                   (selection.type === 'CodeSelection' ? ` (${selection.range[0]}-${selection.range[1]})` : '')}
@@ -105,7 +117,77 @@ const VoiceChatSelectedFiles = ({ selections, setSelections }: {
   );
 };
 
-const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
+// Add this component after VoiceChatSelectedFiles (around line 175)
+const VoiceChatSelectedFilesWrapping = ({ selections }: { selections: StagingSelectionItem[] }) => {
+  const accessor = useAccessor();
+
+  if (selections.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className='flex items-center flex-wrap text-left relative gap-x-0.5 gap-y-1 pb-0.5'>
+      {selections.map((selection, i) => {
+        const thisKey = selection.type === 'CodeSelection'
+          ? selection.type + selection.language + selection.range + selection.state.wasAddedAsCurrentFile + selection.uri.fsPath
+          : selection.type === 'File'
+            ? selection.type + selection.language + selection.state.wasAddedAsCurrentFile + selection.uri.fsPath
+            : selection.type === 'Folder'
+              ? selection.type + selection.language + selection.state + selection.uri.fsPath
+              : i;
+
+        const SelectionIcon = (
+          selection.type === 'File' ? File
+            : selection.type === 'Folder' ? Folder
+              : selection.type === 'CodeSelection' ? Text
+                : (undefined as never)
+        );
+
+        return (
+          <div key={thisKey} className='flex flex-col space-y-[1px]'>
+            <span
+              className="truncate overflow-hidden text-ellipsis"
+              data-tooltip-id='void-tooltip'
+              data-tooltip-content={getRelative(selection.uri, accessor)}
+              data-tooltip-place='top'
+              data-tooltip-delay-show={3000}
+            >
+              <div className={`
+                flex items-center gap-1 relative
+                px-1
+                w-fit h-fit
+                select-none
+                text-xs text-nowrap
+                border rounded-sm
+                bg-void-bg-1 hover:brightness-95 text-void-fg-1
+                border-void-border-1
+                hover:border-void-border-1
+                transition-all duration-150
+                cursor-pointer
+              `}
+                onClick={() => {
+                  if (selection.type === 'File') {
+                    voidOpenFileFn(selection.uri, accessor);
+                  } else if (selection.type === 'CodeSelection') {
+                    voidOpenFileFn(selection.uri, accessor, selection.range);
+                  } else if (selection.type === 'Folder') {
+                    // TODO: reveal in tree
+                  }
+                }}
+              >
+                {<SelectionIcon size={10} />}
+                {getBasename(selection.uri.fsPath) +
+                  (selection.type === 'CodeSelection' ? ` (${selection.range[0]}-${selection.range[1]})` : '')}
+              </div>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const TranscriptDisplay = ({ transcript, setCurrentTranscript, currentTranscriptRef }: { transcript: string, setCurrentTranscript: (transcript: string) => void, currentTranscriptRef: React.RefObject<string> }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayText, setDisplayText] = useState(transcript);
 
@@ -113,7 +195,6 @@ const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
     // Early return if no transcript
     if (!transcript) {
       setDisplayText('');
-      return;
     }
 
     const container = containerRef.current;
@@ -133,7 +214,7 @@ const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
         const measureSpan = document.createElement('span');
         measureSpan.style.visibility = 'hidden';
         measureSpan.style.position = 'absolute';
-        measureSpan.style.fontSize = '12px'; // Match the text-xs class
+        measureSpan.style.fontSize = '14px'; // Match the text-xs class
         measureSpan.style.whiteSpace = 'nowrap';
 
         // Try to get font family, fallback to default if not available
@@ -180,8 +261,6 @@ const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
     });
   }, [transcript]);
 
-  if (!transcript) return null;
-
   return (
     <div className="border-t border-void-border-3" style={{
       background: 'linear-gradient(90deg, var(--void-bg-1) 0%, var(--void-bg-2-alt) 100%)',
@@ -217,10 +296,28 @@ const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
           }} />
         </span>
         <span className="text-void-fg-1 overflow-hidden font-medium" style={{
-          animation: 'typewriter 0.3s ease-out'
+          animation: 'typewriter 0.3s ease-out',
+          fontSize: '0.875rem'
         }}>
           {displayText}
         </span>
+
+        {/* Cancel button */}
+        {transcript && (
+          <button
+            onClick={() => {
+              setCurrentTranscript('');
+              currentTranscriptRef.current = '';
+            }}
+            className="ml-auto p-1 rounded hover:bg-red-500/20 text-red-500 transition-colors flex-shrink-0"
+            title="Cancel transcript"
+            style={{
+              marginLeft: 'auto'
+            }}
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* Add keyframe animations */}
@@ -250,8 +347,10 @@ export const VoiceChat = (props: VoiceChatProps) => {
 	} = props
   const accessor = useAccessor();
   const chatThreadsService = accessor.get('IChatThreadService');
+  const commandService = accessor.get('ICommandService');
   const settingsState = useSettingsState();
-  const [currentTranscript, setCurrentTranscript] = useState('');
+  const [currentTranscript, setCurrentTranscript] = useState('gagdda');
+  const currentTranscriptRef = useRef('');
 
   // Get current thread data
   const chatThreadsState = useChatThreadsState();
@@ -267,7 +366,6 @@ export const VoiceChat = (props: VoiceChatProps) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [participants, setParticipants] = useState<Record<string, any>>({});
-  const [messages, setMessages] = useState<Array<{from: string, text: string, timestamp: Date}>>([]);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
 
@@ -302,6 +400,17 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
     const lastMessage = assistantMessages[assistantMessages.length - 1];
     const messageIdx = currentThread.messages.findLastIndex(msg => msg.role === 'assistant');
+
+    return { message: lastMessage, messageIdx };
+  }, [currentThread.messages]);
+
+  // Get the most recent user message
+  const mostRecentUserMessage = useMemo(() => {
+    const userMessages = currentThread.messages.filter(msg => msg.role === 'user');
+    if (userMessages.length === 0) return null;
+
+    const lastMessage = userMessages[userMessages.length - 1];
+    const messageIdx = currentThread.messages.findLastIndex(msg => msg.role === 'user');
 
     return { message: lastMessage, messageIdx };
   }, [currentThread.messages]);
@@ -403,23 +512,37 @@ export const VoiceChat = (props: VoiceChatProps) => {
     const messageType = event.data?.type;
     const content = event.data?.content;
 
-    // Add to messages list
-    if (messageType === 'chat_message' || messageType === 'agent_response') {
-      setMessages(prev => [...prev, {
-        from: event.data?.user_name || 'Unknown',
-        text: content,
-        timestamp: new Date()
-      }]);
-    }
-
     // Handle transcript updates
     if (messageType === 'latest_transcript') {
       setCurrentTranscript(content || '');
+      currentTranscriptRef.current = content || '';
     }
 
     // Handle turn completed - reset transcript
     if (messageType === 'turn_completed') {
+      const transcriptToSubmit = currentTranscriptRef.current;
+
+      if (transcriptToSubmit && transcriptToSubmit.trim()) {
+        // Get current thread ID at the time of execution
+        const currentThreadId = chatThreadsService.getCurrentThread().id;
+
+        const submitTranscript = async () => {
+          try {
+            await chatThreadsService.addUserMessageAndStreamResponse({
+              userMessage: transcriptToSubmit,
+              threadId: currentThreadId
+            });
+          } catch (e) {
+            console.error('Error while sending transcript message:', e);
+          }
+        };
+        chatThreadsService.abortRunning(currentThreadId).then(() => {
+          submitTranscript();
+        });
+      }
+
       setCurrentTranscript('');
+      currentTranscriptRef.current = '';
     }
 
     // Handle keepalive
@@ -429,6 +552,30 @@ export const VoiceChat = (props: VoiceChatProps) => {
         lastTime: Date.now(),
       };
     }
+  }, [currThreadStreamState, chatThreadsService]);
+
+  // Join meeting handler
+  const joinMeeting = useCallback(async () => {
+    setIsConnected(true);
+    setIsConnecting(false);
+    console.log('Joined meeting successfully');
+  }, []);
+
+  // Left meeting handler
+  const leftMeeting = useCallback(() => {
+    setIsConnected(false);
+    console.log('Left meeting');
+  }, []);
+
+  // Network connection handler
+  const handleNetworkConnection = useCallback((event: any) => {
+    if (event?.type === 'signaling') {
+      if (event?.event === 'connected') {
+        console.log('Network connection re-established');
+      } else if (event?.event === 'interrupted') {
+        console.log('Network connection lost');
+      }
+    }
   }, []);
 
   // Setup event listeners
@@ -436,36 +583,24 @@ export const VoiceChat = (props: VoiceChatProps) => {
     if (!callObject) return;
 
     // Connection events
-    callObject.on('joined-meeting', () => {
-      setIsConnected(true);
-      setIsConnecting(false);
-      console.log('Joined meeting successfully');
-    });
+    callObject.on('joined-meeting', joinMeeting);
 
-    callObject.on('left-meeting', () => {
-      setIsConnected(false);
-      console.log('Left meeting');
-    });
+    callObject.on('left-meeting', leftMeeting);
 
     // Message events
     callObject.on('app-message', handleAppMessage);
 
     // Network events
-    callObject.on('network-connection', (event: any) => {
-      if (event?.type === 'signaling') {
-        if (event?.event === 'connected') {
-          console.log('Network connection re-established');
-        } else if (event?.event === 'interrupted') {
-          console.log('Network connection lost');
-        }
-      }
-    });
+    callObject.on('network-connection', handleNetworkConnection);
 
     // Cleanup
     return () => {
       callObject.off('app-message', handleAppMessage);
+      callObject.off('joined-meeting', joinMeeting);
+      callObject.off('left-meeting', leftMeeting);
+      callObject.off('network-connection', handleNetworkConnection);
     };
-  }, [callObject, handleAppMessage]);
+  }, [callObject, handleAppMessage, joinMeeting, leftMeeting, handleNetworkConnection]);
 
   // Keepalive interval
   useEffect(() => {
@@ -513,10 +648,8 @@ export const VoiceChat = (props: VoiceChatProps) => {
     mostRecentAssistantMessage,
     streamingMessage,
     latestToolRequest,
-    messages,
     scrollToBottom,
     isUserScrolling,
-    currThreadStreamState?.isRunning
   ]);
 
   // Handle parent resize events
@@ -557,7 +690,6 @@ export const VoiceChat = (props: VoiceChatProps) => {
       callObjectRef.current = null;
       setIsConnected(false);
       setParticipants({});
-      setMessages([]);
     } catch (error) {
       console.error('Error disconnecting:', error);
     }
@@ -588,18 +720,11 @@ export const VoiceChat = (props: VoiceChatProps) => {
           position: 'relative'
         }}
       >
-        {isStreaming && (
-          <div style={{
-            position: 'absolute',
-            bottom: '-2px',
-            left: 0,
-            right: 0,
-            height: '2px',
-            background: 'linear-gradient(90deg, transparent, var(--void-link-color), transparent)',
-            animation: 'shimmer 1.5s infinite'
-          }} />
-        )}
-
+        <div className="text-void-fg-3 text-xs font-semibold mb-2" style={{
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          opacity: 0.8
+        }}>Cody</div>
         {/* Reasoning */}
         {messageToRender.reasoning && (
           <div className="voice-chat-reasoning" style={{
@@ -705,14 +830,14 @@ export const VoiceChat = (props: VoiceChatProps) => {
     <div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ width: '100%', height: '100%' }}>
       <div className="w-full h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-2 px-3 py-1 text-void-fg-1 text-xs border-b border-void-border-3" style={{
+        <div className="flex items-center justify-between px-3 py-1 text-void-fg-1 text-xs border-b border-void-border-3" style={{
           background: 'linear-gradient(180deg, var(--void-bg-2) 0%, var(--void-bg-2-alt) 100%)',
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
         }}>
           {/* Left side - Status and connection info */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center gap-2">
             {/* Status indicator */}
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1">
               <div className={`w-2 h-2 rounded-full ${
                 isConnected ? 'bg-green-500' :
                 isConnecting ? 'bg-yellow-500 animate-pulse' :
@@ -722,27 +847,43 @@ export const VoiceChat = (props: VoiceChatProps) => {
             </div>
 
             {/* Connection status */}
-            <span className="text-void-fg-3 flex-shrink-0">
+            <span className="text-void-fg-3">
               {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
             </span>
           </div>
 
-          {/* Center - Current settings display (read-only) */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="text-xs text-void-fg-3 bg-void-bg-1 border border-void-border-2 rounded py-0.5 px-1">
-              {chatModeDisplay}
-            </div>
-            <div className="text-xs text-void-fg-3 bg-void-bg-1 rounded py-0.5 px-1" title={modelDisplay}>
-              {currentModelSelection ?
-                `${currentModelSelection.modelName.length > 12 ?
-                  currentModelSelection.modelName.substring(0, 12) + '...' :
-                  currentModelSelection.modelName}`
-                : 'No model'}
-            </div>
+          {/* Middle - General controls */}
+          <div className="flex items-center gap-1">
+            {/* 1. Chat Mode Dropdown */}
+            <ChatModeDropdown className='text-xs text-void-fg-3 bg-void-bg-1 border border-void-border-2 rounded py-0.5 px-1' />
+
+            {/* 2. Model Dropdown */}
+            <ModelDropdown featureName='Chat' className='text-xs text-void-fg-3 bg-void-bg-1 rounded py-0.5 px-1' />
+
+            {/* 3. New chat button */}
+            <button
+              onClick={() => {commandService.executeCommand(VOID_CMD_SHIFT_L_ACTION_ID)}}
+              className="p-1 rounded hover:bg-void-bg-3 transition-colors"
+              title="New chat"
+            >
+              <Plus size={14} />
+            </button>
+
+            {/* 4. Settings button */}
+            <button
+              onClick={() => {
+                commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
+              }}
+              className="p-1 rounded hover:bg-void-bg-3 transition-colors"
+              title="Open settings"
+            >
+              <Settings size={14} />
+            </button>
           </div>
 
-          {/* Right side - Controls */}
-          <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Right side - Call controls */}
+          <div className="flex items-center gap-1">
+            {/* 5. Mute button - only when connected */}
             {isConnected && (
               <button
                 onClick={toggleMute}
@@ -753,6 +894,7 @@ export const VoiceChat = (props: VoiceChatProps) => {
               </button>
             )}
 
+            {/* 6. Connect/disconnect button */}
             <button
               onClick={isConnected ? disconnect : initializeCall}
               disabled={isConnecting}
@@ -794,13 +936,51 @@ export const VoiceChat = (props: VoiceChatProps) => {
                 background-color: var(--void-border-1);
               }
             `}</style>
+            {/* Show most recent user message if available */}
+            {mostRecentUserMessage && (
+              <div className="voice-chat-user-wrapper">
+                {/* User message label - NOW OUTSIDE */}
+                <div className="text-void-fg-3 text-xs font-semibold mb-2" style={{
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  opacity: 0.8
+                }}>You</div>
 
-            {/* Show most recent assistant message (always visible, even when loading) */}
-            {mostRecentAssistantMessage && !streamingMessage && renderMessageContent(
-              mostRecentAssistantMessage.message,
-              mostRecentAssistantMessage.messageIdx,
-              false
+                {/* Message box */}
+                <div style={{
+                  background: 'var(--void-bg-1)',
+                  padding: '0.75rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid var(--void-border-3)',
+                  marginBottom: '1rem'
+                }}>
+                  {/* Selections with wrapping */}
+                  {mostRecentUserMessage.message.selections && mostRecentUserMessage.message.selections.length > 0 && (
+                    <div className="mb-2">
+                      <VoiceChatSelectedFilesWrapping
+                        selections={mostRecentUserMessage.message.selections}
+                      />
+                    </div>
+                  )}
+
+                  {/* User message content */}
+                  <div className="text-void-fg-2 whitespace-pre-wrap">
+                    {mostRecentUserMessage.message.displayContent}
+                  </div>
+                </div>
+              </div>
             )}
+
+
+            {/* Show most recent assistant message (hide when thinking/loading) */}
+            {mostRecentAssistantMessage && !streamingMessage &&
+              !(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') &&
+              renderMessageContent(
+                mostRecentAssistantMessage.message,
+                mostRecentAssistantMessage.messageIdx,
+                false
+              )
+            }
 
             {/* Show streaming message if available */}
             {streamingMessage && renderMessageContent(streamingMessage, -1, true)}
@@ -843,12 +1023,50 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
             {/* Show message if no assistant messages */}
             {!mostRecentAssistantMessage && !streamingMessage && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && (
-              <div className="text-center text-void-fg-3 text-sm py-8">
-                No assistant messages yet. Start a conversation in the main chat.
+              <div
+                className="flex items-center justify-center text-void-fg-3 text-sm"
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '100%',
+                  textAlign: 'center'
+                }}
+              >
+                No assistant messages yet. Start sending a message by saying something with 'Go Cody' at the end.
               </div>
             )}
           </div>
-
+          {/* Abort button - shows when LLM is running */}
+          {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle' || streamingMessage) && (
+            <button
+              onClick={async () => {
+                const threadId = chatThreadsService.getCurrentThread().id;
+                await chatThreadsService.abortRunning(threadId);
+              }}
+              className="absolute bottom-4 left-4 p-2 rounded-full transition-all"
+              style={{
+                background: 'var(--void-bg-3)',
+                border: '1px solid var(--void-border-2)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--void-bg-2)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--void-bg-3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+              }}
+              title="Stop generation"
+            >
+              <Square size={12} fill="currentColor" />
+            </button>
+          )}
           {/* Scroll to bottom button - hide when streaming/loading */}
           {isUserScrolling && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && !streamingMessage && (
             <button
@@ -876,8 +1094,14 @@ export const VoiceChat = (props: VoiceChatProps) => {
             </button>
           )}
         </div>
+
+
         {/* Live transcript display */}
-        <TranscriptDisplay transcript={currentTranscript} />
+        {isConnected && (<TranscriptDisplay
+          transcript={currentTranscript}
+          setCurrentTranscript={setCurrentTranscript}
+          currentTranscriptRef={currentTranscriptRef}
+        />)}
         {/* Staging selections - moved to bottom with horizontal scrolling */}
         {selections && selections.length > 0 && (
           <div className="border-t border-void-border-3 bg-void-bg-1">

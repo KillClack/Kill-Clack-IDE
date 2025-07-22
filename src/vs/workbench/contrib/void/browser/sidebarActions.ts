@@ -144,7 +144,7 @@ registerAction2(class extends Action2 {
 
 
 // New chat keybind + menu button
-const VOID_CMD_SHIFT_L_ACTION_ID = 'void.cmdShiftL'
+export const VOID_CMD_SHIFT_L_ACTION_ID = 'void.cmdShiftL'
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
