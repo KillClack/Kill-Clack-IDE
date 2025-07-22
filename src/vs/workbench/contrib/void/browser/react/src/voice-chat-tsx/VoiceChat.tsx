@@ -10,10 +10,12 @@ import DailyIframe, {
   DailyEventObjectAppMessage,
 } from '@daily-co/daily-js';
 import { useIsDark } from '../util/services.js';
-import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X } from 'lucide-react';
 import { useAccessor, useChatThreadsState, useChatThreadsStreamState, useSettingsState } from '../util/services.js';
-import { SelectedFiles, builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons } from '../sidebar-tsx/SidebarChat.js';
+import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, IconLoading, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
 import { ChatMarkdownRender, ChatMessageLocation } from '../markdown/ChatMarkdownRender.js';
+import { StagingSelectionItem } from '../../../../common/chatThreadServiceTypes.js';
+import { File, Folder, Text } from 'lucide-react';
 import { ChatMessage, ToolMessage } from '../../../../common/chatThreadServiceTypes.js';
 import { BuiltinToolName } from '../../../../common/toolsServiceTypes.js';
 import { isABuiltinToolName} from '../../../../common/prompt/prompts.js';
@@ -26,6 +28,172 @@ export type VoiceChatProps = {
 	userName?: string;
 }
 
+// Custom SelectedFiles component for voice chat that doesn't wrap
+const VoiceChatSelectedFiles = ({ selections, setSelections }: {
+  selections: StagingSelectionItem[],
+  setSelections: (s: StagingSelectionItem[]) => void
+}) => {
+  const accessor = useAccessor();
+
+  if (selections.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className='flex items-center flex-nowrap text-left relative gap-x-0.5 pb-0.5' style={{ flexWrap: 'nowrap' }}>
+      {selections.map((selection, i) => {
+        const thisKey = selection.type === 'CodeSelection'
+          ? selection.type + selection.language + selection.range + selection.state.wasAddedAsCurrentFile + selection.uri.fsPath
+          : selection.type === 'File'
+            ? selection.type + selection.language + selection.state.wasAddedAsCurrentFile + selection.uri.fsPath
+            : selection.type === 'Folder'
+              ? selection.type + selection.language + selection.state + selection.uri.fsPath
+              : i;
+
+        const SelectionIcon = (
+          selection.type === 'File' ? File
+            : selection.type === 'Folder' ? Folder
+              : selection.type === 'CodeSelection' ? Text
+                : (undefined as never)
+        );
+
+        return (
+          <div key={thisKey} className='flex flex-col space-y-[1px] flex-shrink-0'>
+            <span
+              className="truncate overflow-hidden text-ellipsis"
+              data-tooltip-id='void-tooltip'
+              data-tooltip-content={getRelative(selection.uri, accessor)}
+              data-tooltip-place='top'
+              data-tooltip-delay-show={3000}
+            >
+              <div className={`
+                flex items-center gap-1 relative
+                px-1
+                w-fit h-fit
+                select-none
+                text-xs text-nowrap
+                border rounded-sm
+                bg-void-bg-1 hover:brightness-95 text-void-fg-1
+                border-void-border-1
+                hover:border-void-border-1
+                transition-all duration-150
+                cursor-pointer
+              `}>
+                {<SelectionIcon size={10} />}
+                {getBasename(selection.uri.fsPath) +
+                  (selection.type === 'CodeSelection' ? ` (${selection.range[0]}-${selection.range[1]})` : '')}
+
+                {/* X button to remove selection */}
+                <div
+                  className='cursor-pointer z-1 self-stretch flex items-center justify-center'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelections([...selections.slice(0, i), ...selections.slice(i + 1)]);
+                  }}
+                >
+                  <X
+                    className='stroke-[2]'
+                    size={10}
+                  />
+                </div>
+              </div>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [displayText, setDisplayText] = useState(transcript);
+
+  useEffect(() => {
+    // Early return if no transcript
+    if (!transcript) {
+      setDisplayText('');
+      return;
+    }
+
+    const container = containerRef.current;
+    if (!container) {
+      // If container not ready yet, just show the full transcript
+      setDisplayText(transcript);
+      return;
+    }
+
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      try {
+        // The label text that will always show
+        const labelText = "Live Transcript: ";
+
+        // Create a temporary span to measure text width
+        const measureSpan = document.createElement('span');
+        measureSpan.style.visibility = 'hidden';
+        measureSpan.style.position = 'absolute';
+        measureSpan.style.fontSize = '12px'; // Match the text-xs class
+        measureSpan.style.whiteSpace = 'nowrap';
+
+        // Try to get font family, fallback to default if not available
+        try {
+          measureSpan.style.fontFamily = getComputedStyle(container).fontFamily;
+        } catch (e) {
+          measureSpan.style.fontFamily = 'inherit';
+        }
+
+        document.body.appendChild(measureSpan);
+
+        // First measure the label width
+        measureSpan.textContent = labelText;
+        const labelWidth = measureSpan.offsetWidth;
+
+        // Then measure the full transcript width
+        measureSpan.textContent = transcript;
+        const textWidth = measureSpan.offsetWidth;
+
+        // Get available width for transcript (container width - padding - label width)
+        const containerWidth = container.offsetWidth - 24; // Account for padding
+        const availableWidth = containerWidth - labelWidth - 8; // Extra buffer for gap
+
+        document.body.removeChild(measureSpan);
+
+        if (textWidth > availableWidth && availableWidth > 0) {
+          // Calculate how many characters we can show
+          const avgCharWidth = textWidth / transcript.length;
+          const maxChars = Math.floor(availableWidth / avgCharWidth) - 3; // Reserve space for '...'
+
+          if (maxChars > 0) {
+            setDisplayText('...' + transcript.slice(-(maxChars)));
+          } else {
+            setDisplayText(transcript);
+          }
+        } else {
+          setDisplayText(transcript);
+        }
+      } catch (error) {
+        console.error('Error in TranscriptDisplay:', error);
+        // Fallback to showing full transcript
+        setDisplayText(transcript);
+      }
+    });
+  }, [transcript]);
+
+  if (!transcript) return null;
+
+  return (
+    <div className="border-t border-void-border-3 bg-void-bg-1">
+      <div ref={containerRef} className="px-3 py-2 flex items-center gap-1 text-xs whitespace-nowrap overflow-hidden">
+        <span className="text-void-fg-3 flex-shrink-0">Live Transcript:</span>
+        <span className="text-void-fg-2 overflow-hidden">
+          {displayText}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const VoiceChat = (props: VoiceChatProps) => {
 	const {
 		roomUrl = 'https://victordev.daily.co/sample',
@@ -35,11 +203,15 @@ export const VoiceChat = (props: VoiceChatProps) => {
   const accessor = useAccessor();
   const chatThreadsService = accessor.get('IChatThreadService');
   const settingsState = useSettingsState();
+  const [currentTranscript, setCurrentTranscript] = useState('');
 
   // Get current thread data
   const chatThreadsState = useChatThreadsState();
   const currentThread = chatThreadsService.getCurrentThread();
   const selections = currentThread.state.stagingSelections;
+  const setSelections = (s: StagingSelectionItem[]) => {
+    chatThreadsService.setCurrentThreadState({ stagingSelections: s });
+  };
   const currThreadStreamState = useChatThreadsStreamState(chatThreadsState.currentThreadId);
 
   // State
@@ -192,6 +364,16 @@ export const VoiceChat = (props: VoiceChatProps) => {
       }]);
     }
 
+    // Handle transcript updates
+    if (messageType === 'latest_transcript') {
+      setCurrentTranscript(content || '');
+    }
+
+    // Handle turn completed - reset transcript
+    if (messageType === 'turn_completed') {
+      setCurrentTranscript('');
+    }
+
     // Handle keepalive
     if (messageType === 'keepalive') {
       keepAliveRef.current = {
@@ -271,8 +453,11 @@ export const VoiceChat = (props: VoiceChatProps) => {
     if (container.scrollHeight !== lastScrollHeight.current) {
       lastScrollHeight.current = container.scrollHeight;
 
-      // Only auto-scroll if user isn't manually scrolling
-      if (!isUserScrolling) {
+      // Always auto-scroll if streaming or loading
+      const isStreamingOrLoading = streamingMessage || currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle';
+
+      // Auto-scroll if user isn't manually scrolling OR if streaming/loading
+      if (!isUserScrolling || isStreamingOrLoading) {
         scrollToBottom();
       }
     }
@@ -282,7 +467,8 @@ export const VoiceChat = (props: VoiceChatProps) => {
     latestToolRequest,
     messages,
     scrollToBottom,
-    isUserScrolling
+    isUserScrolling,
+    currThreadStreamState?.isRunning
   ]);
 
   // Handle parent resize events
@@ -486,20 +672,8 @@ export const VoiceChat = (props: VoiceChatProps) => {
           </div>
         </div>
 
-        {/* Staging selections */}
-        {selections && selections.length > 0 && (
-          <div className="px-3 py-2 border-b border-void-border-3 bg-void-bg-1">
-            <div className="text-xs text-void-fg-3 mb-2">Current Selections:</div>
-            <SelectedFiles
-              type="past"
-              selections={selections}
-              messageIdx={-1}
-            />
-          </div>
-        )}
-
         {/* Messages container - fills remaining space */}
-        <div className="w-full h-full overflow-hidden relative">
+        <div className="w-full flex-1 overflow-hidden relative">
           <div
             ref={messagesContainerRef}
             onScroll={handleScroll}
@@ -516,16 +690,21 @@ export const VoiceChat = (props: VoiceChatProps) => {
               }
             `}</style>
 
+            {/* Show most recent assistant message (always visible, even when loading) */}
+            {mostRecentAssistantMessage && !streamingMessage && renderMessageContent(
+              mostRecentAssistantMessage.message,
+              mostRecentAssistantMessage.messageIdx,
+              false
+            )}
+
             {/* Show streaming message if available */}
-            {streamingMessage ? (
-              renderMessageContent(streamingMessage, -1, true)
-            ) : (
-              /* Show most recent assistant message */
-              mostRecentAssistantMessage && renderMessageContent(
-                mostRecentAssistantMessage.message,
-                mostRecentAssistantMessage.messageIdx,
-                false
-              )
+            {streamingMessage && renderMessageContent(streamingMessage, -1, true)}
+
+            {/* Loading indicator - shows below the last message */}
+            {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') && !streamingMessage && (
+              <div className="text-void-fg-2 prose prose-sm">
+                <IconLoading className='opacity-50 text-sm' />
+              </div>
             )}
 
             {/* Tool request approval with full details */}
@@ -539,15 +718,15 @@ export const VoiceChat = (props: VoiceChatProps) => {
             )}
 
             {/* Show message if no assistant messages */}
-            {!mostRecentAssistantMessage && !streamingMessage && (
+            {!mostRecentAssistantMessage && !streamingMessage && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && (
               <div className="text-center text-void-fg-3 text-sm py-8">
                 No assistant messages yet. Start a conversation in the main chat.
               </div>
             )}
           </div>
 
-          {/* Scroll to bottom button */}
-          {isUserScrolling && (
+          {/* Scroll to bottom button - hide when streaming/loading */}
+          {isUserScrolling && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && !streamingMessage && (
             <button
               onClick={() => scrollToBottom()}
               className="absolute bottom-2 right-2 p-2 bg-void-bg-3 hover:bg-void-bg-4 rounded-full shadow-lg border border-void-border-2 transition-all"
@@ -557,6 +736,18 @@ export const VoiceChat = (props: VoiceChatProps) => {
             </button>
           )}
         </div>
+        {/* Live transcript display */}
+        <TranscriptDisplay transcript={currentTranscript} />
+        {/* Staging selections - moved to bottom with horizontal scrolling */}
+        {selections && selections.length > 0 && (
+          <div className="border-t border-void-border-3 bg-void-bg-1">
+            <div className="px-3 py-2">
+              <div className="overflow-x-auto overflow-y-hidden" style={{ maxWidth: '100%' }}>
+                <VoiceChatSelectedFiles selections={selections} setSelections={setSelections} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
