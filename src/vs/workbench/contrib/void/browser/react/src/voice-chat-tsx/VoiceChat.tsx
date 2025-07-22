@@ -11,6 +11,7 @@ import DailyIframe, {
   DailyEventObjectAppMessage,
 } from '@daily-co/daily-js';
 import { useIsDark } from '../util/services.js';
+import { VOID_FOCUS_VOICE_CHAT_ACTION_ID } from '../../../voiceChatActions.js';
 import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X, Square, Plus, Settings } from 'lucide-react';
 import { useAccessor, useChatThreadsState, useChatThreadsStreamState, useSettingsState } from '../util/services.js';
 import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, voidOpenFileFn, IconLoading, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
@@ -21,6 +22,8 @@ import { ChatMessage, ToolMessage } from '../../../../common/chatThreadServiceTy
 import { BuiltinToolName } from '../../../../common/toolsServiceTypes.js';
 import { isABuiltinToolName} from '../../../../common/prompt/prompts.js';
 import { displayInfoOfProviderName } from '../../../../../../../workbench/contrib/void/common/voidSettingsTypes.js';
+import { VOICE_CHAT_VIEW_ID } from '../../../voiceChatPanel.js';
+import { ViewContainerLocation } from '../../../../../../common/views.js';
 import { VOID_OPEN_SETTINGS_ACTION_ID } from '../../../voidSettingsPane.js';
 import { VOID_CMD_SHIFT_L_ACTION_ID } from '../../../sidebarActions.js';
 import '../styles.css';
@@ -348,6 +351,7 @@ export const VoiceChat = (props: VoiceChatProps) => {
   const accessor = useAccessor();
   const chatThreadsService = accessor.get('IChatThreadService');
   const commandService = accessor.get('ICommandService');
+  const paneCompositeService = accessor.get('IPaneCompositePartService');
   const settingsState = useSettingsState();
   const [currentTranscript, setCurrentTranscript] = useState('gagdda');
   const currentTranscriptRef = useRef('');
@@ -379,19 +383,6 @@ export const VoiceChat = (props: VoiceChatProps) => {
     lastTime: 0,
   });
 
-  // Current settings display (read-only)
-  const currentChatMode = settingsState.globalSettings.chatMode;
-  const currentModelSelection = settingsState.modelSelectionOfFeature.Chat;
-
-  const chatModeDisplay = {
-    'normal': 'Chat',
-    'gather': 'Gather',
-    'agent': 'Agent',
-  }[currentChatMode];
-
-  const modelDisplay = currentModelSelection
-    ? `${currentModelSelection.modelName} (${displayInfoOfProviderName(currentModelSelection.providerName).title})`
-    : 'No model selected';
 
   // Get the most recent assistant message
   const mostRecentAssistantMessage = useMemo(() => {
@@ -523,6 +514,7 @@ export const VoiceChat = (props: VoiceChatProps) => {
       const transcriptToSubmit = currentTranscriptRef.current;
 
       if (transcriptToSubmit && transcriptToSubmit.trim()) {
+        // Toggle the voice chat panel if not already open
         // Get current thread ID at the time of execution
         const currentThreadId = chatThreadsService.getCurrentThread().id;
 
@@ -536,9 +528,13 @@ export const VoiceChat = (props: VoiceChatProps) => {
             console.error('Error while sending transcript message:', e);
           }
         };
-        chatThreadsService.abortRunning(currentThreadId).then(() => {
-          submitTranscript();
-        });
+        paneCompositeService.openPaneComposite(VOICE_CHAT_VIEW_ID, ViewContainerLocation.Panel, true)
+          .then(() => {
+            // If the chat thread is running, abort it before submitting
+          chatThreadsService.abortRunning(currentThreadId).then(() => {
+            submitTranscript();
+          });
+        }).catch(console.error);
       }
 
       setCurrentTranscript('');
@@ -879,6 +875,36 @@ export const VoiceChat = (props: VoiceChatProps) => {
             >
               <Settings size={14} />
             </button>
+
+            {/* 5. Demo button - NEW ADDITION */}
+<button
+  onClick={() => {
+    // Set a placeholder transcript
+    const demoTranscript = "Hey Cody, can you explain how React hooks work and give me an example of useState?";
+    setCurrentTranscript(demoTranscript);
+    currentTranscriptRef.current = demoTranscript;
+
+    // Simulate turn_completed after 3 seconds
+    setTimeout(() => {
+      // Create a simulated app message event
+      const simulatedEvent: DailyEventObjectAppMessage = {
+        action: 'app-message',
+        fromId: 'demo', // Not 'local' so it won't be ignored
+        data: {
+          type: 'turn_completed',
+          content: ''
+        }
+      } as DailyEventObjectAppMessage;
+
+      // Call the handleAppMessage function
+      handleAppMessage(simulatedEvent);
+    }, 3000);
+  }}
+  className="p-1 rounded hover:bg-void-bg-3 transition-colors text-void-link-color"
+  title="Demo transcript"
+>
+  <span className="text-xs font-medium">DEMO</span>
+</button>
           </div>
 
           {/* Right side - Call controls */}
