@@ -74,6 +74,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
     "@c4312/eventsource-umd": "^3.0.5",
+    "@daily-co/daily-js": "^0.73.0",
     "@floating-ui/react": "^0.27.8",
     "@google/genai": "^0.13.0",
     "@microsoft/1ds-core-js": "^3.2.13",

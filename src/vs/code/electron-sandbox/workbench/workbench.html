@@ -23,11 +23,13 @@
 				frame-src
 					'self'
 					vscode-webview:
+					https://*.daily.co
 				;
 				script-src
 					'self'
 					'unsafe-eval'
 					blob:
+					https://*.daily.co
 				;
 				style-src
 					'self'
@@ -43,24 +45,6 @@
 					vscode-remote-resource:
 					vscode-managed-remote-resource:
 					https://*.vscode-unpkg.net
-				;
-				require-trusted-types-for
-					'script'
-				;
-				trusted-types
-					amdLoader
-					cellRendererEditorText
-					defaultWorkerFactory
-					diffEditorWidget
-					diffReview
-					domLineBreaksComputer
-					dompurify
-					editorGhostText
-					editorViewLayer
-					notebookRenderer
-					stickyScrollViewLayer
-					tokenizeToString
-					notebookChatEditController
 				;
 		"/>
 

@@ -83,3 +83,7 @@ import '../common/voidUpdateService.js'
 
 // model service
 import '../common/voidModelService.js'
+
+// Void chat panel
+import './voiceChatPanel.js'
+//import './voiceChatActions.js'
