@@ -519,7 +519,7 @@ export const VoiceChat = () => {
       currentTranscriptRef.current = content || '';
     }
 
-    // Handle turn completed - reset transcript
+    // Handle turn completed - send transcript as message and reset transcript
     if (messageType === 'turn_completed') {
       const transcriptToSubmit = currentTranscriptRef.current;
 
@@ -1069,7 +1069,7 @@ export const VoiceChat = () => {
                   textAlign: 'center'
                 }}
               >
-                No assistant messages yet. Start sending a message by saying something with 'Go Cody' at the end.
+                No assistant messages yet. Start sending a message by saying something with 'Cody Execute' at the end.
               </div>
             )}
           </div>
