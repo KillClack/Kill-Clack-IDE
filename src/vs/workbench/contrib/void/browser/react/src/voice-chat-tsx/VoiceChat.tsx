@@ -3,7 +3,7 @@
  *  Licensed under the Apache License, Version 2.0. See LICENSE.txt for more information.
  *--------------------------------------------------------------------------------------*/
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 import DailyIframe, {
   DailyCall,
@@ -11,7 +11,12 @@ import DailyIframe, {
 } from '@daily-co/daily-js';
 
 import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react';
-import { useAccessor } from '../util/services.js';
+import { useAccessor, useChatThreadsState, useChatThreadsStreamState } from '../util/services.js';
+import { SelectedFiles } from '../sidebar-tsx/SidebarChat.js';
+import { ChatMarkdownRender, ChatMessageLocation } from '../markdown/ChatMarkdownRender.js';
+import { ChatMessage, ToolMessage } from '../../../../common/chatThreadServiceTypes.js';
+import { ToolName } from '../../../../common/toolsServiceTypes.js';
+// Import removed - we'll define the tool approval component inline
 import '../styles.css';
 
 export type VoiceChatProps = {
@@ -27,6 +32,13 @@ export const VoiceChat = (props: VoiceChatProps) => {
 		userName = 'Cody'
 	} = props
   const accessor = useAccessor();
+  const chatThreadsService = accessor.get('IChatThreadService');
+
+  // Get current thread data
+  const chatThreadsState = useChatThreadsState();
+  const currentThread = chatThreadsService.getCurrentThread();
+  const selections = currentThread.state.stagingSelections;
+  const currThreadStreamState = useChatThreadsStreamState(chatThreadsState.currentThreadId);
 
   // State
   const [callObject, setCallObject] = useState<DailyCall | null>(null);
@@ -38,10 +50,89 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
   // Refs
   const callObjectRef = useRef<DailyCall | null>(null);
+  // Tool approval component (extracted from SidebarChat)
+  const ToolRequestAcceptRejectButtons = ({ toolName }: { toolName: ToolName }) => {
+    const chatThreadsService = accessor.get('IChatThreadService');
+    const metricsService = accessor.get('IMetricsService');
+
+    const onAccept = useCallback(() => {
+      try {
+        const threadId = chatThreadsService.state.currentThreadId;
+        chatThreadsService.approveLatestToolRequest(threadId);
+        metricsService.capture('Tool Request Accepted', {});
+      } catch (e) {
+        console.error('Error while approving message in chat:', e);
+      }
+    }, [chatThreadsService, metricsService]);
+
+    const onReject = useCallback(() => {
+      try {
+        const threadId = chatThreadsService.state.currentThreadId;
+        chatThreadsService.rejectLatestToolRequest(threadId);
+        metricsService.capture('Tool Request Rejected', {});
+      } catch (e) {
+        console.error('Error while rejecting message in chat:', e);
+      }
+    }, [chatThreadsService, metricsService]);
+
+    return (
+      <div className="flex gap-2 items-center">
+        <button
+          onClick={onAccept}
+          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors"
+        >
+          Approve
+        </button>
+        <button
+          onClick={onReject}
+          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  };
+
   const keepAliveRef = useRef<{ status: string; lastTime: number }>({
     status: 'OK',
     lastTime: 0,
   });
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Get the most recent assistant message
+  const mostRecentAssistantMessage = useMemo(() => {
+    const assistantMessages = currentThread.messages.filter(msg => msg.role === 'assistant');
+    if (assistantMessages.length === 0) return null;
+
+    const lastMessage = assistantMessages[assistantMessages.length - 1];
+    const messageIdx = currentThread.messages.findLastIndex(msg => msg.role === 'assistant');
+
+    return { message: lastMessage, messageIdx };
+  }, [currentThread.messages]);
+
+  // Get streaming message if available
+  const streamingMessage = useMemo(() => {
+    const { displayContentSoFar, reasoningSoFar } = currThreadStreamState?.llmInfo ?? {};
+
+    if (displayContentSoFar || reasoningSoFar) {
+      return {
+        role: 'assistant',
+        displayContent: displayContentSoFar ?? '',
+        reasoning: reasoningSoFar ?? '',
+        anthropicReasoning: null,
+      } as ChatMessage & { role: 'assistant' };
+    }
+
+    return null;
+  }, [currThreadStreamState]);
+
+  // Get the latest tool request that needs approval
+  const latestToolRequest = useMemo(() => {
+    const toolMessages = currentThread.messages.filter(msg =>
+      msg.role === 'tool' && msg.type === 'tool_request'
+    );
+    return toolMessages.length > 0 ? toolMessages[toolMessages.length - 1] as ToolMessage<any> : null;
+  }, [currentThread.messages]);
 
   // Initialize Daily call
   const initializeCall = useCallback(async () => {
@@ -81,13 +172,11 @@ export const VoiceChat = (props: VoiceChatProps) => {
         videoSource: false,
       });
 
-
     } catch (error) {
       console.error('Failed to initialize call:', error);
       setIsConnecting(false);
     }
   }, [isConnecting, isConnected]);
-
 
   // Handle app messages
   const handleAppMessage = useCallback((event: DailyEventObjectAppMessage) => {
@@ -175,7 +264,6 @@ export const VoiceChat = (props: VoiceChatProps) => {
     return () => clearInterval(intervalId);
   }, [isConnected, callObject]);
 
-
   // Toggle mute
   const toggleMute = useCallback(() => {
     if (!callObject) return;
@@ -212,9 +300,51 @@ export const VoiceChat = (props: VoiceChatProps) => {
     };
   }, []);
 
+  // Render the message content with proper styling
+  const renderMessageContent = (messageToRender: ChatMessage & { role: 'assistant' }, messageIdx: number, isStreaming: boolean = false) => {
+    const chatMessageLocation: ChatMessageLocation = {
+      threadId: currentThread.id,
+      messageIdx: messageIdx,
+    };
+
+    return (
+      <div className={`voice-chat-message ${isStreaming ? 'streaming' : ''}`}>
+        {/* Reasoning */}
+        {messageToRender.reasoning && (
+          <div className="voice-chat-reasoning">
+            <div className="text-void-fg-3 text-xs mb-2">Reasoning:</div>
+            <div className="text-void-fg-4 text-sm prose prose-sm break-words max-w-none">
+              <ChatMarkdownRender
+                string={messageToRender.reasoning}
+                chatMessageLocation={chatMessageLocation}
+                isApplyEnabled={false}
+                isLinkDetectionEnabled={true}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Main content */}
+        {messageToRender.displayContent && (
+          <div className="voice-chat-content">
+            <div className="text-void-fg-2 prose prose-sm break-words max-w-none">
+              <ChatMarkdownRender
+                string={messageToRender.displayContent}
+                chatMessageLocation={chatMessageLocation}
+                isApplyEnabled={true}
+                isLinkDetectionEnabled={true}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="@@void-scope">
-      <div className="flex items-center gap-2 px-3 py-1 bg-void-bg-2 text-void-fg-1 text-xs border-t border-void-border-3">
+    <div className="@@void-scope h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-1 bg-void-bg-2 text-void-fg-1 text-xs border-b border-void-border-3 flex-shrink-0">
         {/* Status indicator */}
         <div className="flex items-center gap-1">
           <div className={`w-2 h-2 rounded-full ${
@@ -270,6 +400,56 @@ export const VoiceChat = (props: VoiceChatProps) => {
           >
             {isConnected ? <PhoneOff size={14} /> : <Phone size={14} />}
           </button>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Staging selections */}
+        {selections && selections.length > 0 && (
+          <div className="px-3 py-2 border-b border-void-border-3 bg-void-bg-1">
+            <div className="text-xs text-void-fg-3 mb-2">Current Selections:</div>
+            <SelectedFiles
+              type="past"
+              selections={selections}
+              messageIdx={-1}
+            />
+          </div>
+        )}
+
+        {/* Messages container - scrollable */}
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto p-3 space-y-4"
+        >
+          {/* Show streaming message if available */}
+          {streamingMessage ? (
+            renderMessageContent(streamingMessage, -1, true)
+          ) : (
+            /* Show most recent assistant message */
+            mostRecentAssistantMessage && renderMessageContent(
+              mostRecentAssistantMessage.message,
+              mostRecentAssistantMessage.messageIdx,
+              false
+            )
+          )}
+
+          {/* Tool request approval if needed */}
+          {latestToolRequest && (
+            <div className="mt-4 p-3 bg-void-bg-3 rounded border border-void-border-2">
+              <div className="text-sm text-void-fg-2 mb-2">
+                Tool approval required: {latestToolRequest.name}
+              </div>
+              <ToolRequestAcceptRejectButtons toolName={latestToolRequest.name} />
+            </div>
+          )}
+
+          {/* Show message if no assistant messages */}
+          {!mostRecentAssistantMessage && !streamingMessage && (
+            <div className="text-center text-void-fg-3 text-sm py-8">
+              No assistant messages yet. Start a conversation in the main chat.
+            </div>
+          )}
         </div>
       </div>
     </div>

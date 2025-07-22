@@ -58,6 +58,87 @@
 	--vscode-sideBar-background: var(--vscode-editor-background);
 }
 
+/* Voice Chat specific styles */
+.voice-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* space-y-3 */
+}
+
+.voice-chat-message.streaming {
+  opacity: 0.9; /* opacity-90 */
+}
+
+.voice-chat-reasoning {
+  padding: 0.5rem; /* p-2 */
+  background-color: var(--void-bg-3);
+  border-radius: 0.25rem; /* rounded */
+  border-left: 2px solid var(--void-border-1); /* border-l-2 border-void-border-1 */
+}
+
+.voice-chat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* space-y-2 */
+}
+
+/* Ensure proper text styling for voice chat */
+.voice-chat-message .prose {
+  color: var(--void-fg-2);
+}
+
+.voice-chat-message .prose h1,
+.voice-chat-message .prose h2,
+.voice-chat-message .prose h3,
+.voice-chat-message .prose h4,
+.voice-chat-message .prose h5,
+.voice-chat-message .prose h6 {
+  color: var(--void-fg-1);
+}
+
+.voice-chat-message .prose code {
+  color: var(--void-fg-3);
+  background-color: var(--void-bg-3);
+  padding: 0.125rem 0.25rem; /* px-1 py-0.5 */
+  border-radius: 0.25rem; /* rounded */
+  font-size: 0.75rem; /* text-xs */
+}
+
+.voice-chat-message .prose pre {
+  background-color: var(--void-bg-3);
+  border: 1px solid var(--void-border-2);
+  border-radius: 0.25rem; /* rounded */
+  padding: 0.5rem; /* p-2 */
+  overflow-x: auto;
+}
+
+.voice-chat-message .prose blockquote {
+  border-left: 2px solid var(--void-border-1);
+  padding-left: 0.75rem; /* pl-3 */
+  color: var(--void-fg-3);
+}
+
+/* Tool request styling */
+.voice-chat-tool-request {
+  background-color: var(--void-bg-3);
+  border: 1px solid var(--void-border-2);
+  border-radius: 0.25rem; /* rounded */
+  padding: 0.75rem; /* p-3 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* space-y-2 */
+}
+
+.voice-chat-tool-request .tool-name {
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500; /* font-medium */
+  color: var(--void-fg-1);
+}
+
+.voice-chat-tool-request .tool-description {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--void-fg-3);
+}
 
 
 /* html {
