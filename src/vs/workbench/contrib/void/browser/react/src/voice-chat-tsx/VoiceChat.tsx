@@ -595,6 +595,94 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
   const isDark = useIsDark()
 
+  const [isDemoMode, setIsDemoMode] = useState(true);
+  useEffect(() => {
+    if (!isDemoMode) return;
+
+    const demoTranscripts = [
+      "Hello",
+      "Hello, I'm",
+      "Hello, I'm wondering",
+      "Hello, I'm wondering if",
+      "Hello, I'm wondering if you",
+      "Hello, I'm wondering if you could",
+      "Hello, I'm wondering if you could help",
+      "Hello, I'm wondering if you could help me",
+      "Hello, I'm wondering if you could help me understand",
+      "Hello, I'm wondering if you could help me understand how",
+      "Hello, I'm wondering if you could help me understand how to",
+      "Hello, I'm wondering if you could help me understand how to implement",
+      "Hello, I'm wondering if you could help me understand how to implement a",
+      "Hello, I'm wondering if you could help me understand how to implement a binary",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling f",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases and performance",
+      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases and performance optimizations",
+        "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases and performance optimizations in a way that is easy to follow"
+      ];
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < demoTranscripts.length) {
+        setCurrentTranscript(demoTranscripts[currentIndex]);
+        currentIndex++;
+      } else {
+        // Simulate turn completed
+        setCurrentTranscript('');
+
+        // Start a new sentence after a pause
+        setTimeout(() => {
+          if (isDemoMode) {
+            const secondDemo = [
+              "Also",
+              "Also, could",
+              "Also, could you",
+              "Also, could you show",
+              "Also, could you show me",
+              "Also, could you show me some",
+              "Also, could you show me some examples",
+              "Also, could you show me some examples of",
+              "Also, could you show me some examples of how",
+              "Also, could you show me some examples of how to",
+              "Also, could you show me some examples of how to traverse",
+              "Also, could you show me some examples of how to traverse the",
+              "Also, could you show me some examples of how to traverse the tree",
+            ];
+
+            let secondIndex = 0;
+            const secondInterval = setInterval(() => {
+              if (secondIndex < secondDemo.length && isDemoMode) {
+                setCurrentTranscript(secondDemo[secondIndex]);
+                secondIndex++;
+              } else {
+                setCurrentTranscript('');
+                clearInterval(secondInterval);
+              }
+            }, 1000);
+          }
+        }, 1000);
+
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      setCurrentTranscript('');
+    };
+  }, [isDemoMode]);
+
   return (
     <div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ width: '100%', height: '100%' }}>
       <div className="w-full h-full flex flex-col overflow-hidden">
@@ -609,28 +697,13 @@ export const VoiceChat = (props: VoiceChatProps) => {
                 isConnecting ? 'bg-yellow-500 animate-pulse' :
                 'bg-gray-500'
               }`} />
-              <span className="font-medium">Cody Voice</span>
+              <span className="font-medium">Cody</span>
             </div>
 
             {/* Connection status */}
             <span className="text-void-fg-3 flex-shrink-0">
               {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
             </span>
-
-            {/* Participant count */}
-            {isConnected && (
-              <span className="text-void-fg-3 flex-shrink-0">
-                {Object.keys(participants).length} participant{Object.keys(participants).length !== 1 ? 's' : ''}
-              </span>
-            )}
-
-            {/* Messages indicator */}
-            {messages.length > 0 && (
-              <div className="flex items-center gap-1 text-void-fg-3 flex-shrink-0">
-                <Volume2 size={12} />
-                <span>{messages.length} messages</span>
-              </div>
-            )}
           </div>
 
           {/* Center - Current settings display (read-only) */}

@@ -90,8 +90,8 @@ registerAction2(class extends Action2 {
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
 		// Get services
-		const commandService = accessor.get(ICommandService)
-		const viewsService = accessor.get(IViewsService)
+		//const commandService = accessor.get(ICommandService)
+		//const viewsService = accessor.get(IViewsService)
 		const metricsService = accessor.get(IMetricsService)
 		const editorService = accessor.get(ICodeEditorService)
 		const chatThreadService = accessor.get(IChatThreadService)
@@ -105,11 +105,11 @@ registerAction2(class extends Action2 {
 
 		const selectionRange = roundRangeToLines(editor?.getSelection(), { emptySelectionBehavior: 'null' })
 
-		// open panel
+		/*// open panel
 		const wasAlreadyOpen = viewsService.isViewContainerVisible(VOID_VIEW_CONTAINER_ID)
 		if (!wasAlreadyOpen) {
 			await commandService.executeCommand(VOID_OPEN_SIDEBAR_ACTION_ID)
-		}
+		}*/
 
 		// Add selection to chat
 		// add line selection
