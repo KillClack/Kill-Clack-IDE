@@ -11,6 +11,7 @@ import { ChatMarkdownRender } from '../markdown/ChatMarkdownRender.js';
 import { OllamaSetupInstructions, OneClickSwitchButton, SettingsForProvider, ModelDump } from '../void-settings-tsx/Settings.js';
 import { ColorScheme } from '../../../../../../../platform/theme/common/theme.js';
 import ErrorBoundary from '../sidebar-tsx/ErrorBoundary.js';
+import { VoidSimpleInputBox } from '../util/inputs.js';
 import { isLinux } from '../../../../../../../base/common/platform.js';
 
 const OVERRIDE_VALUE = false
@@ -624,6 +625,74 @@ const VoidOnboardingContent = () => {
 			}
 		/>,
 		2: <OnboardingPageShell
+			content={
+				<div>
+					<div className="text-5xl font-light text-center">Settings and Themes</div>
+
+					{/* Transfer Settings Section */}
+					<div className="mt-8 text-center flex flex-col items-center gap-4 w-full max-w-md mx-auto">
+						<h4 className="text-void-fg-3 mb-4">Transfer your settings from an existing editor?</h4>
+						<OneClickSwitchButton className='w-full px-4 py-2' fromEditor="VS Code" />
+						<OneClickSwitchButton className='w-full px-4 py-2' fromEditor="Cursor" />
+						<OneClickSwitchButton className='w-full px-4 py-2' fromEditor="Windsurf" />
+					</div>
+
+					{/* Voice Chat Settings Section - NEW */}
+					<div className="mt-12 max-w-md mx-auto">
+						<h4 className="text-void-fg-3 mb-4 text-center">Configure voice chat (optional)</h4>
+
+						{/* Daily Room URL */}
+						<div className="mb-4">
+							<label className="text-sm text-void-fg-3 mb-1 block">
+								Daily Room URL <span className='text-void-fg-4 text-xs'>(required for voice)</span>
+							</label>
+							<ErrorBoundary>
+								<VoidSimpleInputBox
+									value={voidSettingsState.globalSettings.dailyRoomUrl || ''}
+									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomUrl', newVal)}
+									placeholder="https://yourcompany.daily.co/room-name"
+									compact={true}
+								/>
+							</ErrorBoundary>
+							<div className="text-xs text-void-fg-4 mt-1">
+								Get your room URL from <a
+									href="https://daily.co"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-void-link-color hover:underline"
+								>daily.co</a>
+							</div>
+						</div>
+
+						{/* Daily Room Token */}
+						<div className="mb-4">
+							<label className="text-sm text-void-fg-3 mb-1 block">
+								Daily Room Token <span className='text-void-fg-4 text-xs'>(optional)</span>
+							</label>
+							<ErrorBoundary>
+								<VoidSimpleInputBox
+									value={voidSettingsState.globalSettings.dailyRoomToken || ''}
+									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomToken', newVal)}
+									placeholder="eyJ0eXAiOiJKV1QiLCJhb... (leave empty for public rooms)"
+									passwordBlur={true}
+									compact={true}
+								/>
+							</ErrorBoundary>
+							<div className="text-xs text-void-fg-4 mt-1">
+								For private rooms only. Public rooms don't need a token.
+							</div>
+						</div>
+
+						{/* Info box */}
+						<div className="text-xs text-void-fg-4 mt-4 p-3 bg-void-bg-2 rounded">
+							Voice chat allows you to talk to AI assistants. You can skip this now and configure it later in settings.
+						</div>
+					</div>
+				</div>
+			}
+			bottom={lastPagePrevAndNextButtons}
+		/>,
+		3: <OnboardingPageShell
 
 			content={
 				<div>

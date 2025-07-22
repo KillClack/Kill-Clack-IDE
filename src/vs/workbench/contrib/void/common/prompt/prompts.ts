@@ -192,7 +192,15 @@ export const builtinTools: {
 	}
 } = {
 	// --- context-gathering (read/search/list) ---
-
+	go_to_location: {
+		name: 'go_to_location',
+		description: `Moves the user to a specific location in a file (or simply a file itself). Use this ONLY when the user explicitly asks to be taken to, moved to, navigated to, or shown a specific location in the code. If you don't know the exact location, use search tools first to find it.`,
+		params: {
+			...uriParam('file'),
+			start_line: { description: 'Optional. The line number to jump to. If provided with end_line, will select the range.' },
+			end_line: { description: 'Optional. The end line of the range to select. Only used if start_line is also provided.' },
+		},
+	},
 	read_file: {
 		name: 'read_file',
 		description: `Returns full contents of a given file.`,

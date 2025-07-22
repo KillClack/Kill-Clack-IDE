@@ -157,6 +157,14 @@ export class ToolsService implements IToolsService {
 		const queryBuilder = instantiationService.createInstance(QueryBuilder);
 
 		this.validateParams = {
+			go_to_location: (params: RawToolParamsObj) => {
+				const { uri: uriStr, start_line: startLineUnknown, end_line: endLineUnknown } = params;
+				const uri = validateURI(uriStr);
+				const startLine = validateNumber(startLineUnknown, { default: null });
+				const endLine = validateNumber(endLineUnknown, { default: null });
+
+				return { uri, startLine, endLine };
+			},
 			read_file: (params: RawToolParamsObj) => {
 				const { uri: uriStr, start_line: startLineUnknown, end_line: endLineUnknown, page_number: pageNumberUnknown } = params
 				const uri = validateURI(uriStr)
@@ -294,6 +302,9 @@ export class ToolsService implements IToolsService {
 
 
 		this.callTool = {
+			go_to_location: async ({ uri, startLine, endLine }) => {
+				return { result: { uri, startLine, endLine } };
+			},
 			read_file: async ({ uri, startLine, endLine, pageNumber }) => {
 				await voidModelService.initializeModel(uri)
 				const { model } = await voidModelService.getModelSafe(uri)
@@ -475,6 +486,14 @@ export class ToolsService implements IToolsService {
 
 		// given to the LLM after the call for successful tool calls
 		this.stringOfResult = {
+			go_to_location: (params, result) => {
+				const lineInfo = params.startLine
+					? params.endLine
+						? ` at lines ${params.startLine}-${params.endLine}`
+						: ` at line ${params.startLine}`
+					: '';
+				return `Navigating to ${params.uri.fsPath}${lineInfo}`;
+			},
 			read_file: (params, result) => {
 				return `${params.uri.fsPath}\n\`\`\`\n${result.fileContents}\n\`\`\`${nextPageStr(result.hasNextPage)}${result.hasNextPage ? `\nMore info because truncated: this file has ${result.totalNumLines} lines, or ${result.totalFileLen} characters.` : ''}`
 			},

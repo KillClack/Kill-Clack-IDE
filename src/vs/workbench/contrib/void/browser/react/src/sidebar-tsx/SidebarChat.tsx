@@ -1403,6 +1403,11 @@ const loadingTitleWrapper = (item: React.ReactNode): React.ReactNode => {
 }
 
 const titleOfBuiltinToolName = {
+	'go_to_location': {
+		done: 'Navigated to location',
+		proposed: 'Navigate to location',
+		running: loadingTitleWrapper('Navigating')
+	},
 	'read_file': { done: 'Read file', proposed: 'Read file', running: loadingTitleWrapper('Reading file') },
 	'ls_dir': { done: 'Inspected folder', proposed: 'Inspect folder', running: loadingTitleWrapper('Inspecting folder') },
 	'get_dir_tree': { done: 'Inspected folder tree', proposed: 'Inspect folder tree', running: loadingTitleWrapper('Inspecting folder tree') },
@@ -1465,6 +1470,13 @@ const toolNameToDesc = (toolName: BuiltinToolName, _toolParams: BuiltinToolCallP
 	}
 
 	const x = {
+		'go_to_location': () => {
+			const toolParams = _toolParams as BuiltinToolCallParams['go_to_location'];
+			return {
+				desc1: getBasename(toolParams.uri.fsPath),
+				desc1Info: getRelative(toolParams.uri, accessor),
+			};
+		},
 		'read_file': () => {
 			const toolParams = _toolParams as BuiltinToolCallParams['read_file']
 			return {
@@ -1915,6 +1927,62 @@ export const MCPToolWrapper = ({ toolMessage }: WrapperProps<string>) => {
 type ResultWrapper<T extends ToolName> = (props: WrapperProps<T>) => React.ReactNode
 
 export const builtinToolNameToComponent: { [T in BuiltinToolName]: { resultWrapper: ResultWrapper<T>, } } = {
+	'go_to_location': {
+		resultWrapper: ({ toolMessage }) => {
+			const accessor = useAccessor()
+			const title = getTitle(toolMessage)
+			const { desc1, desc1Info } = toolNameToDesc(toolMessage.name, toolMessage.params, accessor)
+			const icon = null
+
+			if (toolMessage.type === 'tool_request') return null
+			if (toolMessage.type === 'running_now') return null
+
+			const isError = false
+			const isRejected = toolMessage.type === 'rejected'
+			const { params } = toolMessage
+			const componentParams: ToolHeaderParams = { title, desc1, desc1Info, isError, icon, isRejected }
+
+			// Add line range to description if present
+			if (params.startLine !== null) {
+				const lineRange = params.endLine !== null
+					? `(lines ${params.startLine}-${params.endLine})`
+					: `(line ${params.startLine})`;
+
+				// Update desc1Info to include line information in tooltip
+				componentParams.desc1Info = `${desc1Info || getRelative(params.uri, accessor)} ${lineRange}`;
+
+				// Keep desc1 as just the basename, add line info as desc2
+				componentParams.desc2 = <span className="text-void-fg-4 text-xs">{lineRange}</span>;
+			}
+
+			if (toolMessage.type === 'success') {
+				// Automatically open the file when the tool succeeds
+				const range: [number, number] | undefined =
+					params.startLine !== null && params.endLine !== null
+						? [params.startLine, params.endLine]
+						: params.startLine !== null
+							? [params.startLine, params.startLine]
+							: undefined;
+
+				// Perform the navigation
+				voidOpenFileFn(params.uri, accessor, range);
+
+				componentParams.onClick = () => {
+					voidOpenFileFn(params.uri, accessor, range)
+				}
+			}
+			else if (toolMessage.type === 'tool_error') {
+				const { result } = toolMessage
+				componentParams.bottomChildren = <BottomChildren title='Error'>
+					<CodeChildren>
+						{result}
+					</CodeChildren>
+				</BottomChildren>
+			}
+
+			return <ToolHeaderWrapper {...componentParams} />
+		},
+	},
 	'read_file': {
 		resultWrapper: ({ toolMessage }) => {
 			const accessor = useAccessor()
