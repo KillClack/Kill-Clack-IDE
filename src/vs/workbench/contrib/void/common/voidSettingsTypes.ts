@@ -452,6 +452,8 @@ export type GlobalSettings = {
 	isOnboardingComplete: boolean;
 	disableSystemMessage: boolean;
 	autoAcceptLLMChanges: boolean;
+	dailyRoomUrl: string;
+	dailyRoomToken: string;
 }
 
 export const defaultGlobalSettings: GlobalSettings = {
@@ -468,6 +470,8 @@ export const defaultGlobalSettings: GlobalSettings = {
 	isOnboardingComplete: false,
 	disableSystemMessage: false,
 	autoAcceptLLMChanges: false,
+	dailyRoomUrl: '',
+	dailyRoomToken: '',
 }
 
 export type GlobalSettingName = keyof GlobalSettings

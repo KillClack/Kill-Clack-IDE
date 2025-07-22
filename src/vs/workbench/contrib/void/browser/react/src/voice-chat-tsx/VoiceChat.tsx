@@ -10,8 +10,8 @@ import DailyIframe, {
   DailyCall,
   DailyEventObjectAppMessage,
 } from '@daily-co/daily-js';
+import { Severity } from '../../../../../../../platform/notification/common/notification.js';
 import { useIsDark } from '../util/services.js';
-import { VOID_FOCUS_VOICE_CHAT_ACTION_ID } from '../../../voiceChatActions.js';
 import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X, Square, Plus, Settings } from 'lucide-react';
 import { useAccessor, useChatThreadsState, useChatThreadsStreamState, useSettingsState } from '../util/services.js';
 import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, voidOpenFileFn, IconLoading, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
@@ -27,12 +27,6 @@ import { ViewContainerLocation } from '../../../../../../common/views.js';
 import { VOID_OPEN_SETTINGS_ACTION_ID } from '../../../voidSettingsPane.js';
 import { VOID_CMD_SHIFT_L_ACTION_ID } from '../../../sidebarActions.js';
 import '../styles.css';
-
-export type VoiceChatProps = {
-	roomUrl?: string;
-	token?: string;
-	userName?: string;
-}
 
 // Custom SelectedFiles component for voice chat that doesn't wrap
 const VoiceChatSelectedFiles = ({ selections, setSelections }: {
@@ -342,18 +336,15 @@ const TranscriptDisplay = ({ transcript, setCurrentTranscript, currentTranscript
   );
 };
 
-export const VoiceChat = (props: VoiceChatProps) => {
-	const {
-		roomUrl = 'https://victordev.daily.co/sample',
-		token = '',
-		userName = 'Cody'
-	} = props
+export const VoiceChat = () => {
   const accessor = useAccessor();
   const chatThreadsService = accessor.get('IChatThreadService');
   const commandService = accessor.get('ICommandService');
   const paneCompositeService = accessor.get('IPaneCompositePartService');
+  const notificationService = accessor.get('INotificationService');
   const settingsState = useSettingsState();
-  const [currentTranscript, setCurrentTranscript] = useState('gagdda');
+
+  const [currentTranscript, setCurrentTranscript] = useState('');
   const currentTranscriptRef = useRef('');
 
   // Get current thread data
@@ -456,6 +447,18 @@ export const VoiceChat = (props: VoiceChatProps) => {
   const initializeCall = useCallback(async () => {
     if (isConnecting || isConnected) return;
 
+    if (!(settingsState.globalSettings.dailyRoomUrl)) {
+      // Show notification to configure Daily settings
+      notificationService.notify({
+        severity: Severity.Warning,
+        message: 'Please configure Daily room URL in settings to use voice chat.'
+      });
+
+      // Open settings
+      commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
+      return;
+    }
+
     setIsConnecting(true);
 
     try {
@@ -483,18 +486,25 @@ export const VoiceChat = (props: VoiceChatProps) => {
       setCallObject(newCallObject);
 
       // Join the meeting
-      await newCallObject.join({
-        url: roomUrl,
-        token: token,
-        userName: userName,
+      const joinParams: any = {
+        url: settingsState.globalSettings.dailyRoomUrl,
+        userName: "User",
         videoSource: false,
-      });
+      };
+
+      // Only add token if it exists and is not empty
+      if (settingsState.globalSettings.dailyRoomToken && settingsState.globalSettings.dailyRoomToken.trim()) {
+        joinParams.token = settingsState.globalSettings.dailyRoomToken;
+      }
+
+      // Join with the configured settings
+      await newCallObject.join(joinParams);
 
     } catch (error) {
       console.error('Failed to initialize call:', error);
       setIsConnecting(false);
     }
-  }, [isConnecting, isConnected, roomUrl, token, userName]);
+  }, [isConnecting, isConnected, settingsState.globalSettings.dailyRoomUrl, settingsState.globalSettings.dailyRoomToken]);
 
   // Handle app messages
   const handleAppMessage = useCallback((event: DailyEventObjectAppMessage) => {
@@ -613,7 +623,6 @@ export const VoiceChat = (props: VoiceChatProps) => {
         callObject.sendAppMessage({
           type: 'keepalive',
           content: Date.now().toString(),
-          user_name: userName,
         }, '*');
       } catch (error) {
         console.error('Error sending keepalive:', error);
@@ -621,7 +630,7 @@ export const VoiceChat = (props: VoiceChatProps) => {
     }, 5000);
 
     return () => clearInterval(intervalId);
-  }, [isConnected, callObject, userName]);
+  }, [isConnected, callObject]);
 
   // Detect content changes and scroll to bottom
   useEffect(() => {

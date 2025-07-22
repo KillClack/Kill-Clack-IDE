@@ -1490,6 +1490,56 @@ export const Settings = () => {
 									</div>
 								</div>
 
+								{/* Voice Chat section */}
+								<div>
+								<ErrorBoundary>
+									<h2 className='text-3xl mb-2'>Voice Chat</h2>
+									<h4 className={`text-void-fg-3 mb-4`}>Configure Daily for voice-based interactions with AI.</h4>
+
+									<div className='flex flex-col gap-4 max-w-xl'>
+									{/* Daily Room URL */}
+									<div>
+										<label className='text-sm text-void-fg-3 mb-1 block'>
+										Daily Room URL <span className='text-red-500'>*</span>
+										</label>
+										<VoidSimpleInputBox
+										value={settingsState.globalSettings.dailyRoomUrl}
+										onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomUrl', newVal)}
+										placeholder="https://yourcompany.daily.co/room-name"
+										compact={true}
+										/>
+										<div className='text-xs text-void-fg-4 mt-1'>
+										The URL of your Daily.co meeting room (required)
+										</div>
+									</div>
+
+									{/* Daily Room Token */}
+									<div>
+										<label className='text-sm text-void-fg-3 mb-1 block'>
+										Daily Room Token <span className='text-void-fg-4'>(optional)</span>
+										</label>
+										<VoidSimpleInputBox
+										value={settingsState.globalSettings.dailyRoomToken}
+										onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomToken', newVal)}
+										placeholder="eyJ0eXAiOiJKV1QiLCJhb... (leave empty for public rooms)"
+										passwordBlur={true}
+										compact={true}
+										/>
+										<div className='text-xs text-void-fg-4 mt-1'>
+										Meeting token for private rooms. Leave empty for public rooms.
+										</div>
+									</div>
+
+									{/* Info box */}
+									<div className='mt-4 p-3 bg-void-bg-2 rounded text-xs text-void-fg-3'>
+										<ChatMarkdownRender
+										string="Voice chat requires a [Daily.co](https://daily.co) account. Create a room and optionally generate a meeting token for private access."
+										chatMessageLocation={undefined}
+										/>
+									</div>
+									</div>
+								</ErrorBoundary>
+								</div>
 								{/* AI Instructions section */}
 								<div className='max-w-[600px]'>
 									<h2 className={`text-3xl mb-2`}>AI Instructions</h2>
