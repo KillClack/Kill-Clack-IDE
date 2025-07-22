@@ -127,7 +127,7 @@ const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
     requestAnimationFrame(() => {
       try {
         // The label text that will always show
-        const labelText = "Live Transcript: ";
+        const labelText = "LIVE TRANSCRIPT";
 
         // Create a temporary span to measure text width
         const measureSpan = document.createElement('span');
@@ -183,13 +183,61 @@ const TranscriptDisplay = ({ transcript }: { transcript: string }) => {
   if (!transcript) return null;
 
   return (
-    <div className="border-t border-void-border-3 bg-void-bg-1">
-      <div ref={containerRef} className="px-3 py-2 flex items-center gap-1 text-xs whitespace-nowrap overflow-hidden">
-        <span className="text-void-fg-3 flex-shrink-0">Live Transcript:</span>
-        <span className="text-void-fg-2 overflow-hidden">
+    <div className="border-t border-void-border-3" style={{
+      background: 'linear-gradient(90deg, var(--void-bg-1) 0%, var(--void-bg-2-alt) 100%)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Animated left border */}
+      <div style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: '3px',
+        background: 'var(--void-link-color)',
+        animation: 'pulse 2s ease-in-out infinite'
+      }} />
+
+      <div ref={containerRef} className="px-4 py-2 flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
+        <span className="text-void-fg-3 flex-shrink-0 font-semibold flex items-center gap-2" style={{
+          textTransform: 'uppercase',
+          fontSize: '0.7rem',
+          letterSpacing: '0.5px'
+        }}>
+          LIVE TRANSCRIPT
+          {/* Animated recording dot */}
+          <span style={{
+            display: 'inline-block',
+            width: '6px',
+            height: '6px',
+            background: '#ef4444',
+            borderRadius: '50%',
+            animation: 'blink 1.5s ease-in-out infinite'
+          }} />
+        </span>
+        <span className="text-void-fg-1 overflow-hidden font-medium" style={{
+          animation: 'typewriter 0.3s ease-out'
+        }}>
           {displayText}
         </span>
       </div>
+
+      {/* Add keyframe animations */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        @keyframes typewriter {
+          from { opacity: 0; transform: translateX(-5px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 };
@@ -533,11 +581,42 @@ export const VoiceChat = (props: VoiceChatProps) => {
     };
 
     return (
-      <div className={`voice-chat-message ${isStreaming ? 'streaming' : ''}`}>
+      <div
+        className={`voice-chat-message ${isStreaming ? 'streaming' : ''}`}
+        style={{
+          animation: 'fadeInUp 0.3s ease-out',
+          position: 'relative'
+        }}
+      >
+        {isStreaming && (
+          <div style={{
+            position: 'absolute',
+            bottom: '-2px',
+            left: 0,
+            right: 0,
+            height: '2px',
+            background: 'linear-gradient(90deg, transparent, var(--void-link-color), transparent)',
+            animation: 'shimmer 1.5s infinite'
+          }} />
+        )}
+
         {/* Reasoning */}
         {messageToRender.reasoning && (
-          <div className="voice-chat-reasoning">
-            <div className="text-void-fg-3 text-xs mb-2">Reasoning:</div>
+          <div className="voice-chat-reasoning" style={{
+            padding: '0.75rem',
+            background: 'linear-gradient(135deg, var(--void-bg-3) 0%, var(--void-bg-2-alt) 100%)',
+            borderRadius: '0.5rem',
+            borderLeft: '3px solid var(--void-link-color)',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+            transition: 'all 0.2s ease'
+          }}>
+            <div className="text-void-fg-3 mb-2" style={{
+              fontWeight: 600,
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase',
+              fontSize: '0.7rem',
+              opacity: 0.8
+            }}>Reasoning</div>
             <div className="text-void-fg-4 text-sm prose prose-sm break-words max-w-none">
               <ChatMarkdownRender
                 string={messageToRender.reasoning}
@@ -551,8 +630,17 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
         {/* Main content */}
         {messageToRender.displayContent && (
-          <div className="voice-chat-content">
-            <div className="text-void-fg-2 prose prose-sm break-words max-w-none">
+          <div className="voice-chat-content" style={{
+            lineHeight: '1.6',
+            // Add these styles for background:
+            background: 'var(--void-bg-1)', // or use a gradient like below
+            // background: 'linear-gradient(135deg, var(--void-bg-1) 0%, var(--void-bg-2) 100%)',
+            padding: '1rem',
+            borderRadius: '0.5rem',
+            border: '1px solid var(--void-border-3)',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+          }}>
+            <div className="text-void-fg-2 prose prose-sm break-words max-w-none" style={{ fontSize: '0.9rem' }}>
               <ChatMarkdownRender
                 string={messageToRender.displayContent}
                 chatMessageLocation={chatMessageLocation}
@@ -562,6 +650,24 @@ export const VoiceChat = (props: VoiceChatProps) => {
             </div>
           </div>
         )}
+
+        {/* Add keyframe animations */}
+        <style>{`
+          @keyframes fadeInUp {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          .voice-chat-reasoning:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            transform: translateX(2px);
+          }
+        `}</style>
       </div>
     );
   };
@@ -595,99 +701,14 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
   const isDark = useIsDark()
 
-  const [isDemoMode, setIsDemoMode] = useState(true);
-  useEffect(() => {
-    if (!isDemoMode) return;
-
-    const demoTranscripts = [
-      "Hello",
-      "Hello, I'm",
-      "Hello, I'm wondering",
-      "Hello, I'm wondering if",
-      "Hello, I'm wondering if you",
-      "Hello, I'm wondering if you could",
-      "Hello, I'm wondering if you could help",
-      "Hello, I'm wondering if you could help me",
-      "Hello, I'm wondering if you could help me understand",
-      "Hello, I'm wondering if you could help me understand how",
-      "Hello, I'm wondering if you could help me understand how to",
-      "Hello, I'm wondering if you could help me understand how to implement",
-      "Hello, I'm wondering if you could help me understand how to implement a",
-      "Hello, I'm wondering if you could help me understand how to implement a binary",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling f",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases and performance",
-      "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases and performance optimizations",
-        "Hello, I'm wondering if you could help me understand how to implement a binary search tree in TypeScript with proper type safety and error handling for edge cases and performance optimizations in a way that is easy to follow"
-      ];
-
-    let currentIndex = 0;
-    const interval = setInterval(() => {
-      if (currentIndex < demoTranscripts.length) {
-        setCurrentTranscript(demoTranscripts[currentIndex]);
-        currentIndex++;
-      } else {
-        // Simulate turn completed
-        setCurrentTranscript('');
-
-        // Start a new sentence after a pause
-        setTimeout(() => {
-          if (isDemoMode) {
-            const secondDemo = [
-              "Also",
-              "Also, could",
-              "Also, could you",
-              "Also, could you show",
-              "Also, could you show me",
-              "Also, could you show me some",
-              "Also, could you show me some examples",
-              "Also, could you show me some examples of",
-              "Also, could you show me some examples of how",
-              "Also, could you show me some examples of how to",
-              "Also, could you show me some examples of how to traverse",
-              "Also, could you show me some examples of how to traverse the",
-              "Also, could you show me some examples of how to traverse the tree",
-            ];
-
-            let secondIndex = 0;
-            const secondInterval = setInterval(() => {
-              if (secondIndex < secondDemo.length && isDemoMode) {
-                setCurrentTranscript(secondDemo[secondIndex]);
-                secondIndex++;
-              } else {
-                setCurrentTranscript('');
-                clearInterval(secondInterval);
-              }
-            }, 1000);
-          }
-        }, 1000);
-
-        clearInterval(interval);
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(interval);
-      setCurrentTranscript('');
-    };
-  }, [isDemoMode]);
-
   return (
     <div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ width: '100%', height: '100%' }}>
       <div className="w-full h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-2 px-3 py-1 bg-void-bg-2 text-void-fg-1 text-xs border-b border-void-border-3">
+        <div className="flex items-center gap-2 px-3 py-1 text-void-fg-1 text-xs border-b border-void-border-3" style={{
+          background: 'linear-gradient(180deg, var(--void-bg-2) 0%, var(--void-bg-2-alt) 100%)',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
+        }}>
           {/* Left side - Status and connection info */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* Status indicator */}
@@ -752,14 +773,25 @@ export const VoiceChat = (props: VoiceChatProps) => {
             onScroll={handleScroll}
             className="w-full h-full p-3 space-y-4 overflow-y-auto"
             style={{
-              scrollbarWidth: 'none', // Firefox
-              msOverflowStyle: 'none', // IE/Edge
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'var(--void-border-2) transparent'
             }}
           >
-            {/* Hide webkit scrollbars */}
+            {/* Enhanced scrollbar styles */}
             <style>{`
               .overflow-y-auto::-webkit-scrollbar {
-                display: none;
+                width: 6px;
+              }
+              .overflow-y-auto::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .overflow-y-auto::-webkit-scrollbar-thumb {
+                background-color: var(--void-border-2);
+                border-radius: 3px;
+                transition: background-color 0.2s ease;
+              }
+              .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+                background-color: var(--void-border-1);
               }
             `}</style>
 
@@ -775,15 +807,34 @@ export const VoiceChat = (props: VoiceChatProps) => {
 
             {/* Loading indicator - shows below the last message */}
             {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') && !streamingMessage && (
-              <div className="text-void-fg-2 prose prose-sm">
-                <IconLoading className='opacity-50 text-sm' />
+              <div className="flex items-center gap-2 text-void-fg-3 text-sm py-2">
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid var(--void-border-2)',
+                  borderTopColor: 'var(--void-link-color)',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                <span>Thinking...</span>
+                <style>{`
+                  @keyframes spin {
+                    to { transform: rotate(360deg); }
+                  }
+                `}</style>
               </div>
             )}
 
             {/* Tool request approval with full details */}
             {latestToolRequest && (
-              <div className="mt-4 p-3 bg-void-bg-3 rounded border border-void-border-2">
-                <div className="text-sm text-void-fg-2 mb-3 font-medium">
+              <div className="mt-4 p-4 rounded border" style={{
+                background: 'linear-gradient(135deg, var(--void-bg-3) 0%, var(--void-bg-2-alt) 100%)',
+                borderColor: 'var(--void-border-2)',
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+                transition: 'all 0.2s ease'
+              }}>
+                <div className="text-sm text-void-fg-2 mb-3 font-semibold flex items-center gap-2">
+                  <span style={{ fontSize: '1rem' }}>⚡</span>
                   Tool approval required:
                 </div>
                 {renderToolRequest(latestToolRequest.message, latestToolRequest.messageIdx)}
@@ -802,7 +853,23 @@ export const VoiceChat = (props: VoiceChatProps) => {
           {isUserScrolling && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && !streamingMessage && (
             <button
               onClick={() => scrollToBottom()}
-              className="absolute bottom-2 right-2 p-2 bg-void-bg-3 hover:bg-void-bg-4 rounded-full shadow-lg border border-void-border-2 transition-all"
+              className="absolute bottom-4 right-4 p-2 rounded-full transition-all"
+              style={{
+                background: 'var(--void-bg-3)',
+                border: '1px solid var(--void-border-2)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--void-bg-2)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--void-bg-3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+              }}
               title="Scroll to bottom"
             >
               <ChevronDown size={16} />
