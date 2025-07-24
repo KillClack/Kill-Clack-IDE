@@ -13,16 +13,15 @@ import DailyIframe, {
 import ErrorBoundary from '../sidebar-tsx/ErrorBoundary.js';
 import { Severity } from '../../../../../../../platform/notification/common/notification.js';
 import { useIsDark } from '../util/services.js';
-import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X, Square, Plus, Settings } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, ChevronDown, X, Square, Plus, Settings } from 'lucide-react';
 import { useAccessor, useChatThreadsState, useChatThreadsStreamState, useSettingsState } from '../util/services.js';
-import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, voidOpenFileFn, IconLoading, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
+import { builtinToolNameToComponent, MCPToolWrapper, ToolRequestAcceptRejectButtons, voidOpenFileFn, getRelative, getBasename } from '../sidebar-tsx/SidebarChat.js';
 import { ChatMarkdownRender, ChatMessageLocation } from '../markdown/ChatMarkdownRender.js';
 import { StagingSelectionItem } from '../../../../common/chatThreadServiceTypes.js';
 import { File, Folder, Text } from 'lucide-react';
 import { ChatMessage, ToolMessage } from '../../../../common/chatThreadServiceTypes.js';
 import { BuiltinToolName } from '../../../../common/toolsServiceTypes.js';
 import { isABuiltinToolName} from '../../../../common/prompt/prompts.js';
-import { displayInfoOfProviderName } from '../../../../../../../workbench/contrib/void/common/voidSettingsTypes.js';
 import { VOICE_CHAT_VIEW_ID } from '../../../voiceChatPanel.js';
 import { ViewContainerLocation } from '../../../../../../common/views.js';
 import { VOID_OPEN_SETTINGS_ACTION_ID } from '../../../voidSettingsPane.js';
@@ -474,9 +473,11 @@ export const VoiceChat = () => {
             severity: Severity.Warning,
             message: 'Please configure Daily API key, room domain, and Deepgram API key in settings.'
         });
-        commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
+        await commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
         return;
     }
+
+    setIsConnecting(true);
 
     // Generate unique room name
     const roomName = `voice-chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -542,17 +543,13 @@ export const VoiceChat = () => {
         return;
     }
 
-
-
-    setIsConnecting(true);
-
     try {
       // Start voice agent first
       await voiceAgentService.startVoiceAgent({
-        dailyRoomUrl: dailyRoomUrl,
-        dailyRoomToken: dailyRoomToken,
-        deepgramApiKey: settingsState.globalSettings.deepgramApiKey
-    });
+          dailyRoomUrl: dailyRoomUrl,
+          dailyRoomToken: dailyRoomToken,
+          deepgramApiKey: settingsState.globalSettings.deepgramApiKey
+      });
       // Create call object similar to PropertyChat
       const newCallObject: DailyCall = (DailyIframe as any).createCallObject({
         dailyConfig: {
@@ -595,7 +592,7 @@ export const VoiceChat = () => {
           message: error || 'Failed to start voice chat'
       });
     }
-  }, [isConnecting, isConnected, settingsState.globalSettings.dailyRoomUrl, settingsState.globalSettings.dailyRoomToken]);
+  }, [isConnecting, isConnected, settingsState.globalSettings.dailyApiKey, settingsState.globalSettings.dailyRoomDomain, settingsState.globalSettings.deepgramApiKey]);
 
   // Handle app messages
   const handleAppMessage = useCallback((event: DailyEventObjectAppMessage) => {
@@ -653,8 +650,6 @@ export const VoiceChat = () => {
 
   // Join meeting handler
   const joinMeeting = useCallback(async () => {
-    setIsConnected(true);
-    setIsConnecting(false);
     console.log('Joined meeting successfully');
   }, []);
 
@@ -663,6 +658,13 @@ export const VoiceChat = () => {
     setIsConnected(false);
     console.log('Left meeting');
   }, []);
+
+  // Participant joined handler (AI agent joined)
+  const handleParticipantJoined = useCallback((participant: any) => {
+      console.log('Participant joined:', participant);
+      setIsConnected(true);
+      setIsConnecting(false);
+    }, []);
 
   // Network connection handler
   const handleNetworkConnection = useCallback((event: any) => {
@@ -682,6 +684,8 @@ export const VoiceChat = () => {
     // Connection events
     callObject.on('joined-meeting', joinMeeting);
 
+    callObject.on('participant-joined', handleParticipantJoined);
+
     callObject.on('left-meeting', leftMeeting);
 
     // Message events
@@ -694,6 +698,7 @@ export const VoiceChat = () => {
     return () => {
       callObject.off('app-message', handleAppMessage);
       callObject.off('joined-meeting', joinMeeting);
+      callObject.off('participant-joined', handleParticipantJoined);
       callObject.off('left-meeting', leftMeeting);
       callObject.off('network-connection', handleNetworkConnection);
     };
@@ -756,10 +761,15 @@ export const VoiceChat = () => {
     if (!callObject) return;
 
     try {
-      // Stop voice agent
-      await voiceAgentService.stopVoiceAgent();
+
       await callObject.leave();
       await callObject.destroy();
+      setCallObject(null);
+      callObjectRef.current = null;
+      setIsConnected(false);
+      setParticipants({});
+      // Stop voice agent
+      await voiceAgentService.stopVoiceAgent();
       // Delete the room
       if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
         const headers = {
@@ -774,10 +784,6 @@ export const VoiceChat = () => {
               console.error('Error deleting Daily room:', error);
           }
       }
-      setCallObject(null);
-      callObjectRef.current = null;
-      setIsConnected(false);
-      setParticipants({});
     } catch (error) {
       console.error('Error disconnecting:', error);
     }

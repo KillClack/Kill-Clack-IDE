@@ -667,7 +667,7 @@ const VoidOnboardingContent = () => {
 						{/* Daily Room Domain */}
 						<div className="mb-4">
 							<label className="text-sm text-void-fg-3 mb-1 block">
-								Daily Room Domain <span className='text-void-fg-4 text-xs'>(optional)</span>
+								Daily Room Domain <span className='text-void-fg-4 text-xs'>(required for voice)</span>
 							</label>
 							<ErrorBoundary>
 								<VoidSimpleInputBox

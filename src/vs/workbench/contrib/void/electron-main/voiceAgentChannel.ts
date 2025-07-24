@@ -80,18 +80,19 @@ export class VoiceAgentChannel implements IServerChannel {
 		this.statusEmitter.fire({ status: 'starting' });
 
 		try {
-			// Check if image exists, pull if missing
 			try {
-				execSync('docker inspect victorrpp/killclack-voice-agent:latest', { stdio: 'ignore' });
-			} catch {
-				console.log('Pulling voice agent image...');
 				execSync('docker pull victorrpp/killclack-voice-agent:latest', { stdio: 'inherit' });
+			} catch (error) {
+				console.error('Failed to pull voice agent image:', error);
+				throw new Error('Failed to pull voice agent image. Please check your internet connection.');
 			}
 
 			// Start container
 			const dockerArgs = [
 				'run', '--rm', '-d',
 				'--name', 'killclack-voice-agent',
+				'--log-driver', 'none',
+				'--network', 'host',
 				'-e', `DAILY_ROOM_URL=${dailyRoomUrl}`,
 				'-e', `DEEPGRAM_API_KEY=${deepgramApiKey}`
 			];

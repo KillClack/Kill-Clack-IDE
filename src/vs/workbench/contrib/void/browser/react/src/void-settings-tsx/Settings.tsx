@@ -1516,7 +1516,7 @@ export const Settings = () => {
 									{/* Daily Room Domain */}
 									<div>
 										<label className='text-sm text-void-fg-3 mb-1 block'>
-										Daily Room Domain <span className='text-void-fg-4'>(optional)</span>
+										Daily Room Domain <span className='text-void-fg-4'>(required)</span>
 										</label>
 										<VoidSimpleInputBox
 										value={settingsState.globalSettings.dailyRoomDomain}
@@ -1532,7 +1532,7 @@ export const Settings = () => {
 									{/* Info box */}
 									<div className='mt-4 p-3 bg-void-bg-2 rounded text-xs text-void-fg-3'>
 										<ChatMarkdownRender
-										string="Voice chat requires a [Daily.co](https://daily.co) account. Create a room and optionally generate a meeting token for private access."
+										string="Voice chat requires a [Daily.co](https://daily.co) account."
 										chatMessageLocation={undefined}
 										/>
 									</div>

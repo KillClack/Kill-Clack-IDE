@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+clear
+
 set -e
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
