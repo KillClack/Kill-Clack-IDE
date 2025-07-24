@@ -634,7 +634,8 @@ export const VoiceChat = () => {
           });
         }).catch(console.error);
       }
-
+      // Clear staging
+      chatThreadsService.setCurrentThreadState({ stagingSelections: [] });
       setCurrentTranscript('');
       currentTranscriptRef.current = '';
     }
