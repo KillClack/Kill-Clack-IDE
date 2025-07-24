@@ -48,6 +48,7 @@ import { INativeHostService } from '../../../../../../../platform/native/common/
 import { IEditCodeService } from '../../../editCodeServiceInterface.js'
 import { IToolsService } from '../../../toolsService.js'
 import { IConvertToLLMMessageService } from '../../../convertToLLMMessageService.js'
+import { IVoiceAgentService } from '../../../../common/voiceAgentService.js'
 import { ITerminalService } from '../../../../../terminal/browser/terminal.js'
 import { ISearchService } from '../../../../../../services/search/common/search.js'
 import { IExtensionManagementService } from '../../../../../../../platform/extensionManagement/common/extensionManagement.js'
@@ -55,7 +56,7 @@ import { IMCPService } from '../../../../common/mcpService.js';
 import { IStorageService, StorageScope } from '../../../../../../../platform/storage/common/storage.js'
 import { OPT_OUT_KEY } from '../../../../common/storageKeys.js'
 import { IPaneCompositePartService } from '../../../../../../services/panecomposite/browser/panecomposite.js'
-
+import { IVoiceAgentStatusEvent } from '../../../../common/voiceAgentService.js'
 
 // normally to do this you'd use a useEffect that calls .onDidChangeState(), but useEffect mounts too late and misses initial state changes
 
@@ -82,6 +83,8 @@ const ctrlKZoneStreamingStateListeners: Set<(diffareaid: number, s: boolean) => 
 const commandBarURIStateListeners: Set<(uri: URI) => void> = new Set();
 const activeURIListeners: Set<(uri: URI | null) => void> = new Set();
 
+const voiceAgentServiceListeners: Set<(e: IVoiceAgentStatusEvent) => void> = new Set()
+
 const mcpListeners: Set<() => void> = new Set()
 
 
@@ -102,12 +105,16 @@ export const _registerServices = (accessor: ServicesAccessor) => {
 		voidCommandBarService: accessor.get(IVoidCommandBarService),
 		modelService: accessor.get(IModelService),
 		mcpService: accessor.get(IMCPService),
+		voiceAgentService: accessor.get(IVoiceAgentService),
 	}
 
-	const { settingsStateService, chatThreadsStateService, refreshModelService, themeService, editCodeService, voidCommandBarService, modelService, mcpService } = stateServices
+	const { voiceAgentService, settingsStateService, chatThreadsStateService, refreshModelService, themeService, editCodeService, voidCommandBarService, modelService, mcpService } = stateServices
 
-
-
+	disposables.push(
+		voiceAgentService.onStatusChange((e) => {
+			voiceAgentServiceListeners.forEach(l => l(e))
+		})
+	)
 
 	chatThreadsState = chatThreadsStateService.state
 	disposables.push(
@@ -231,6 +238,7 @@ const getReactAccessor = (accessor: ServicesAccessor) => {
 		IMCPService: accessor.get(IMCPService),
 
 		IStorageService: accessor.get(IStorageService),
+		IVoiceAgentService: accessor.get(IVoiceAgentService),
 
 	} as const
 	return reactAccessor
@@ -402,6 +410,21 @@ export const useMCPServiceState = () => {
 		mcpListeners.add(listener);
 		return () => { mcpListeners.delete(listener) };
 	}, []);
+	return s
+}
+
+
+export const useVoiceAgentStatus = () => {
+	const accessor = useAccessor()
+	const voiceAgentService = accessor.get('IVoiceAgentService')
+	const [s, ss] = useState<IVoiceAgentStatusEvent>(voiceAgentService.status)
+	useEffect(() => {
+		const listener = (e: IVoiceAgentStatusEvent) => {
+			ss(e)
+		}
+		voiceAgentServiceListeners.add(listener)
+		return () => { voiceAgentServiceListeners.delete(listener) }
+	}, [])
 	return s
 }
 

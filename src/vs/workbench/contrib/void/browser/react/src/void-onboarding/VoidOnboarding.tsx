@@ -639,23 +639,23 @@ const VoidOnboardingContent = () => {
 
 					{/* Voice Chat Settings Section - NEW */}
 					<div className="mt-12 max-w-md mx-auto">
-						<h4 className="text-void-fg-3 mb-4 text-center">Configure voice chat (optional)</h4>
+						<h4 className="text-void-fg-3 mb-4 text-center">Configure voice chat</h4>
 
-						{/* Daily Room URL */}
+						{/* Daily API Key */}
 						<div className="mb-4">
 							<label className="text-sm text-void-fg-3 mb-1 block">
-								Daily Room URL <span className='text-void-fg-4 text-xs'>(required for voice)</span>
+								Daily API Key <span className='text-void-fg-4 text-xs'>(required for voice)</span>
 							</label>
 							<ErrorBoundary>
 								<VoidSimpleInputBox
-									value={voidSettingsState.globalSettings.dailyRoomUrl || ''}
-									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomUrl', newVal)}
-									placeholder="https://yourcompany.daily.co/room-name"
+									value={voidSettingsState.globalSettings.dailyApiKey || ''}
+									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyApiKey', newVal)}
+									placeholder="Enter your Daily API Key"
 									compact={true}
 								/>
 							</ErrorBoundary>
 							<div className="text-xs text-void-fg-4 mt-1">
-								Get your room URL from <a
+								Get your API key from <a
 									href="https://daily.co"
 									target="_blank"
 									rel="noopener noreferrer"
@@ -664,28 +664,47 @@ const VoidOnboardingContent = () => {
 							</div>
 						</div>
 
-						{/* Daily Room Token */}
+						{/* Daily Room Domain */}
 						<div className="mb-4">
 							<label className="text-sm text-void-fg-3 mb-1 block">
-								Daily Room Token <span className='text-void-fg-4 text-xs'>(optional)</span>
+								Daily Room Domain <span className='text-void-fg-4 text-xs'>(optional)</span>
 							</label>
 							<ErrorBoundary>
 								<VoidSimpleInputBox
-									value={voidSettingsState.globalSettings.dailyRoomToken || ''}
-									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomToken', newVal)}
-									placeholder="eyJ0eXAiOiJKV1QiLCJhb... (leave empty for public rooms)"
+									value={voidSettingsState.globalSettings.dailyRoomDomain || ''}
+									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomDomain', newVal)}
+									placeholder="your-company.daily.co"
 									passwordBlur={true}
 									compact={true}
 								/>
 							</ErrorBoundary>
 							<div className="text-xs text-void-fg-4 mt-1">
-								For private rooms only. Public rooms don't need a token.
+								Your Daily room domain for voice chat.
 							</div>
 						</div>
 
 						{/* Info box */}
 						<div className="text-xs text-void-fg-4 mt-4 p-3 bg-void-bg-2 rounded">
 							Voice chat allows you to talk to AI assistants. You can skip this now and configure it later in settings.
+						</div>
+
+						{/* Deepgram API Key */}
+						<div className="mt-4">
+							<label className="text-sm text-void-fg-3 mb-1 block">
+								Deepgram API Key <span className='text-void-fg-4 text-xs'>(required for voice)</span>
+							</label>
+							<ErrorBoundary>
+								<VoidSimpleInputBox
+									value={voidSettingsState.globalSettings.deepgramApiKey || ''}
+									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('deepgramApiKey', newVal)}
+									placeholder="sk_... (leave empty for public rooms)"
+									passwordBlur={true}
+									compact={true}
+								/>
+							</ErrorBoundary>
+							<div className="text-xs text-void-fg-4 mt-1">
+								Your Deepgram API key for speech-to-text transcription.
+							</div>
 						</div>
 					</div>
 				</div>

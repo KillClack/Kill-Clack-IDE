@@ -27,6 +27,7 @@ import { VOICE_CHAT_VIEW_ID } from '../../../voiceChatPanel.js';
 import { ViewContainerLocation } from '../../../../../../common/views.js';
 import { VOID_OPEN_SETTINGS_ACTION_ID } from '../../../voidSettingsPane.js';
 import { VOID_CMD_SHIFT_L_ACTION_ID } from '../../../sidebarActions.js';
+import { useVoiceAgentStatus } from '../util/services.js';
 import '../styles.css';
 
 // Custom SelectedFiles component for voice chat that doesn't wrap
@@ -348,6 +349,8 @@ export const VoiceChat = () => {
   const commandService = accessor.get('ICommandService');
   const paneCompositeService = accessor.get('IPaneCompositePartService');
   const notificationService = accessor.get('INotificationService');
+  const voiceAgentService = accessor.get('IVoiceAgentService');
+  const voiceAgentProcessStatus = useVoiceAgentStatus();
   const settingsState = useSettingsState();
 
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -371,6 +374,7 @@ export const VoiceChat = () => {
   const [isUserScrolling, setIsUserScrolling] = useState(false);
 
   // Refs
+  const dailyRoomName = useRef<string | null>(null);
   const callObjectRef = useRef<DailyCall | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollHeight = useRef<number>(0);
@@ -465,21 +469,90 @@ export const VoiceChat = () => {
   const initializeCall = useCallback(async () => {
     if (isConnecting || isConnected) return;
 
-    if (!(settingsState.globalSettings.dailyRoomUrl)) {
-      // Show notification to configure Daily settings
-      notificationService.notify({
-        severity: Severity.Warning,
-        message: 'Please configure Daily room URL in settings to use voice chat.'
-      });
-
-      // Open settings
-      commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
-      return;
+    if (!(settingsState.globalSettings.dailyApiKey && settingsState.globalSettings.dailyRoomDomain && settingsState.globalSettings.deepgramApiKey)) {
+        notificationService.notify({
+            severity: Severity.Warning,
+            message: 'Please configure Daily API key, room domain, and Deepgram API key in settings.'
+        });
+        commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
+        return;
     }
+
+    // Generate unique room name
+    const roomName = `voice-chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    dailyRoomName.current = roomName;
+    const dailyRoomUrl = `https://${settingsState.globalSettings.dailyRoomDomain}/${roomName}`;
+
+    // Create the room
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+    };
+    const roomPayload = {
+        name: roomName,
+        privacy: 'private',
+        properties: {
+            start_video_off: true,
+        },
+    };
+
+    try {
+        await fetch('https://api.daily.co/v1/rooms/', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(roomPayload),
+        });
+    } catch (error) {
+        console.error('Failed to create Daily room:', error);
+        setIsConnecting(false);
+        notificationService.notify({
+            severity: Severity.Error,
+            message: 'Failed to create voice chat room'
+        });
+        return;
+    }
+
+    // Create access token
+    const tokenPayload = {
+        properties: {
+            room_name: roomName,
+            permissions: {
+                canAdmin: ['participants'],
+                canSend: true,
+            },
+        },
+    };
+
+    let dailyRoomToken;
+    try {
+        const tokenResponse = await fetch('https://api.daily.co/v1/meeting-tokens/', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(tokenPayload),
+        });
+        const tokenData = await tokenResponse.json();
+        dailyRoomToken = tokenData.token;
+    } catch (error) {
+        console.error('Failed to create Daily access token:', error);
+        setIsConnecting(false);
+        notificationService.notify({
+            severity: Severity.Error,
+            message: 'Failed to create access token'
+        });
+        return;
+    }
+
+
 
     setIsConnecting(true);
 
     try {
+      // Start voice agent first
+      await voiceAgentService.startVoiceAgent({
+        dailyRoomUrl: dailyRoomUrl,
+        dailyRoomToken: dailyRoomToken,
+        deepgramApiKey: settingsState.globalSettings.deepgramApiKey
+    });
       // Create call object similar to PropertyChat
       const newCallObject: DailyCall = (DailyIframe as any).createCallObject({
         dailyConfig: {
@@ -505,22 +578,22 @@ export const VoiceChat = () => {
 
       // Join the meeting
       const joinParams: any = {
-        url: settingsState.globalSettings.dailyRoomUrl,
-        userName: "User",
-        videoSource: false,
+          url: dailyRoomUrl,
+          userName: "User",
+          videoSource: false,
+          token: dailyRoomToken,
       };
-
-      // Only add token if it exists and is not empty
-      if (settingsState.globalSettings.dailyRoomToken && settingsState.globalSettings.dailyRoomToken.trim()) {
-        joinParams.token = settingsState.globalSettings.dailyRoomToken;
-      }
 
       // Join with the configured settings
       await newCallObject.join(joinParams);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize call:', error);
       setIsConnecting(false);
+      notificationService.notify({
+          severity: Severity.Error,
+          message: error || 'Failed to start voice chat'
+      });
     }
   }, [isConnecting, isConnected, settingsState.globalSettings.dailyRoomUrl, settingsState.globalSettings.dailyRoomToken]);
 
@@ -683,8 +756,24 @@ export const VoiceChat = () => {
     if (!callObject) return;
 
     try {
+      // Stop voice agent
+      await voiceAgentService.stopVoiceAgent();
       await callObject.leave();
       await callObject.destroy();
+      // Delete the room
+      if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
+        const headers = {
+            Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+        };
+        try {
+            await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
+                  method: 'DELETE',
+                  headers: headers,
+              });
+          } catch (error) {
+              console.error('Error deleting Daily room:', error);
+          }
+      }
       setCallObject(null);
       callObjectRef.current = null;
       setIsConnected(false);
@@ -692,17 +781,40 @@ export const VoiceChat = () => {
     } catch (error) {
       console.error('Error disconnecting:', error);
     }
-  }, [callObject]);
+  }, [callObject, settingsState.globalSettings.dailyApiKey]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (callObjectRef.current) {
-        callObjectRef.current.leave().catch(console.error);
-        callObjectRef.current.destroy().catch(console.error);
-      }
+        const cleanup = async () => {
+            if (callObjectRef.current) {
+                try {
+                    await callObjectRef.current.leave();
+                    await callObjectRef.current.destroy();
+                } catch (error) {
+                    console.error('Cleanup error:', error);
+                }
+            }
+            // Delete the room
+            if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
+              const headers = {
+                  Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+              };
+              try {
+                  await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
+                        method: 'DELETE',
+                        headers: headers,
+                    });
+                } catch (error) {
+                    console.error('Error deleting Daily room:', error);
+                }
+            }
+            // Stop voice agent on unmount
+            await voiceAgentService.stopVoiceAgent();
+        };
+        cleanup().catch(console.error);
     };
-  }, []);
+}, [voiceAgentService, settingsState.globalSettings.dailyApiKey]);
 
   // Render the message content with proper styling
   const renderMessageContent = (messageToRender: ChatMessage & { role: 'assistant' }, messageIdx: number, isStreaming: boolean = false) => {
@@ -822,6 +934,17 @@ export const VoiceChat = () => {
       </div>
     );
   };
+
+  // Listen to status changes
+  useEffect(() => {
+      if (voiceAgentProcessStatus.status === 'error')
+        {
+          notificationService.notify({
+              severity: Severity.Error,
+              message: `Voice agent error: ${voiceAgentProcessStatus.error}`
+          });
+      }
+  }, [voiceAgentProcessStatus, notificationService]);
 
   const isDark = useIsDark()
 

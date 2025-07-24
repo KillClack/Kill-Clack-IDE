@@ -293,12 +293,17 @@ class VoidSettingsService extends Disposable implements IVoidSettingsService {
 			// add autoAcceptLLMChanges feature
 			if (readS.globalSettings.autoAcceptLLMChanges === undefined) readS.globalSettings.autoAcceptLLMChanges = false;
 
-			// add dailyRoomUrl and dailyRoomToken
-			if (readS.globalSettings.dailyRoomUrl === undefined) {
-				readS.globalSettings.dailyRoomUrl = '';
+			// add dailyApiKey and dailyRoomDomain
+			if (readS.globalSettings.dailyApiKey === undefined) {
+				readS.globalSettings.dailyApiKey = ''; // used for voice chat
 			}
-			if (readS.globalSettings.dailyRoomToken === undefined) {
-				readS.globalSettings.dailyRoomToken = '';
+			if (readS.globalSettings.dailyRoomDomain === undefined) {
+				readS.globalSettings.dailyRoomDomain = ''; // used for voice chat
+			}
+
+			// add deepgramApiKey
+			if (readS.globalSettings.deepgramApiKey === undefined) {
+				readS.globalSettings.deepgramApiKey = ''; // used for voice chat
 			}
 		}
 		catch (e) {

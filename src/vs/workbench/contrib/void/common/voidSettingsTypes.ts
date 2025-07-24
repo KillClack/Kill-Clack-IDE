@@ -452,8 +452,9 @@ export type GlobalSettings = {
 	isOnboardingComplete: boolean;
 	disableSystemMessage: boolean;
 	autoAcceptLLMChanges: boolean;
-	dailyRoomUrl: string;
-	dailyRoomToken: string;
+	dailyApiKey: string;
+	dailyRoomDomain: string;
+	deepgramApiKey: string; // used for voice chat
 }
 
 export const defaultGlobalSettings: GlobalSettings = {
@@ -470,8 +471,9 @@ export const defaultGlobalSettings: GlobalSettings = {
 	isOnboardingComplete: false,
 	disableSystemMessage: false,
 	autoAcceptLLMChanges: false,
-	dailyRoomUrl: '',
-	dailyRoomToken: '',
+	dailyApiKey: '',
+	dailyRoomDomain: '',
+	deepgramApiKey: '', // used for voice chat
 }
 
 export type GlobalSettingName = keyof GlobalSettings
