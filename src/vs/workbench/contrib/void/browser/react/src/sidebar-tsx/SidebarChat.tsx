@@ -1964,9 +1964,6 @@ export const builtinToolNameToComponent: { [T in BuiltinToolName]: { resultWrapp
 							? [params.startLine, params.startLine]
 							: undefined;
 
-				// Perform the navigation
-				voidOpenFileFn(params.uri, accessor, range);
-
 				componentParams.onClick = () => {
 					voidOpenFileFn(params.uri, accessor, range)
 				}

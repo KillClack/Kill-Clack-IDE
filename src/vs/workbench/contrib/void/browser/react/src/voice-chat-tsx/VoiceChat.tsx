@@ -10,6 +10,7 @@ import DailyIframe, {
   DailyCall,
   DailyEventObjectAppMessage,
 } from '@daily-co/daily-js';
+import ErrorBoundary from '../sidebar-tsx/ErrorBoundary.js';
 import { Severity } from '../../../../../../../platform/notification/common/notification.js';
 import { useIsDark } from '../util/services.js';
 import { Mic, MicOff, Phone, PhoneOff, Volume2, ChevronDown, X, Square, Plus, Settings } from 'lucide-react';
@@ -184,7 +185,7 @@ const VoiceChatSelectedFilesWrapping = ({ selections }: { selections: StagingSel
   );
 };
 
-const TranscriptDisplay = ({ transcript, setCurrentTranscript, currentTranscriptRef }: { transcript: string, setCurrentTranscript: (transcript: string) => void, currentTranscriptRef: React.RefObject<string> }) => {
+const TranscriptDisplay = ({ transcript, setCurrentTranscript, sendAppMessage, currentTranscriptRef }: { transcript: string, setCurrentTranscript: (transcript: string) => void, sendAppMessage: (messageObject: any) => void, currentTranscriptRef: React.RefObject<string> }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayText, setDisplayText] = useState(transcript);
 
@@ -303,6 +304,11 @@ const TranscriptDisplay = ({ transcript, setCurrentTranscript, currentTranscript
         {transcript && (
           <button
             onClick={() => {
+              const messageObject = {
+                type: "clear_current_transcript",
+                content: "Clear current transcript",
+              };
+              sendAppMessage(messageObject);
               setCurrentTranscript('');
               currentTranscriptRef.current = '';
             }}
@@ -442,6 +448,18 @@ export const VoiceChat = () => {
     const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
     setIsUserScrolling(!isAtBottom);
   }, []);
+
+  // Send App message
+  const sendAppMessage = useCallback((messageObject: any) => {
+    if (!callObject) return;
+
+    try {
+      callObject.sendAppMessage(messageObject, '*');
+      console.log('App message sent:', messageObject);
+    } catch (error) {
+      console.error('Error sending app message:', error);
+    }
+  }, [callObject]);
 
   // Initialize Daily call
   const initializeCall = useCallback(async () => {
@@ -607,30 +625,6 @@ export const VoiceChat = () => {
       callObject.off('network-connection', handleNetworkConnection);
     };
   }, [callObject, handleAppMessage, joinMeeting, leftMeeting, handleNetworkConnection]);
-
-  // Keepalive interval
-  useEffect(() => {
-    if (!isConnected || !callObject) return;
-
-    const intervalId = setInterval(() => {
-      // Check keepalive status
-      if (Date.now() - keepAliveRef.current.lastTime > 15000 && keepAliveRef.current.lastTime !== 0) {
-        console.warn('Keepalive timeout detected');
-      }
-
-      // Send keepalive
-      try {
-        callObject.sendAppMessage({
-          type: 'keepalive',
-          content: Date.now().toString(),
-        }, '*');
-      } catch (error) {
-        console.error('Error sending keepalive:', error);
-      }
-    }, 5000);
-
-    return () => clearInterval(intervalId);
-  }, [isConnected, callObject]);
 
   // Detect content changes and scroll to bottom
   useEffect(() => {
@@ -832,322 +826,295 @@ export const VoiceChat = () => {
   const isDark = useIsDark()
 
   return (
-    <div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ width: '100%', height: '100%' }}>
-      <div className="w-full h-full flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-1 text-void-fg-1 text-xs border-b border-void-border-3" style={{
-          background: 'linear-gradient(180deg, var(--void-bg-2) 0%, var(--void-bg-2-alt) 100%)',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
-        }}>
-          {/* Left side - Status and connection info */}
-          <div className="flex items-center gap-2">
-            {/* Status indicator */}
-            <div className="flex items-center gap-1">
-              <div className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' :
-                isConnecting ? 'bg-yellow-500 animate-pulse' :
-                'bg-gray-500'
-              }`} />
-              <span className="font-medium">Cody</span>
+    <ErrorBoundary>
+      <div className={`@@void-scope ${isDark ? 'dark' : ''}`} style={{ width: '100%', height: '100%' }}>
+        <div className="w-full h-full flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-1 text-void-fg-1 text-xs border-b border-void-border-3" style={{
+            background: 'linear-gradient(180deg, var(--void-bg-2) 0%, var(--void-bg-2-alt) 100%)',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
+          }}>
+            {/* Left side - Status and connection info */}
+            <div className="flex items-center gap-2">
+              {/* Status indicator */}
+              <div className="flex items-center gap-1">
+                <div className={`w-2 h-2 rounded-full ${
+                  isConnected ? 'bg-green-500' :
+                  isConnecting ? 'bg-yellow-500 animate-pulse' :
+                  'bg-gray-500'
+                }`} />
+                <span className="font-medium">Cody</span>
+              </div>
+
+              {/* Connection status */}
+              <span className="text-void-fg-3">
+                {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
+              </span>
             </div>
 
-            {/* Connection status */}
-            <span className="text-void-fg-3">
-              {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-            </span>
-          </div>
+            {/* Middle - General controls */}
+            <div className="flex items-center gap-1">
+              {/* 1. Chat Mode Dropdown */}
+              <ChatModeDropdown className='text-xs text-void-fg-3 bg-void-bg-1 border border-void-border-2 rounded py-0.5 px-1' />
 
-          {/* Middle - General controls */}
-          <div className="flex items-center gap-1">
-            {/* 1. Chat Mode Dropdown */}
-            <ChatModeDropdown className='text-xs text-void-fg-3 bg-void-bg-1 border border-void-border-2 rounded py-0.5 px-1' />
+              {/* 2. Model Dropdown */}
+              <ModelDropdown featureName='Chat' className='text-xs text-void-fg-3 bg-void-bg-1 rounded py-0.5 px-1' />
 
-            {/* 2. Model Dropdown */}
-            <ModelDropdown featureName='Chat' className='text-xs text-void-fg-3 bg-void-bg-1 rounded py-0.5 px-1' />
-
-            {/* 3. New chat button */}
-            <button
-              onClick={() => {commandService.executeCommand(VOID_CMD_SHIFT_L_ACTION_ID)}}
-              className="p-1 rounded hover:bg-void-bg-3 transition-colors"
-              title="New chat"
-            >
-              <Plus size={14} />
-            </button>
-
-            {/* 4. Settings button */}
-            <button
-              onClick={() => {
-                commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
-              }}
-              className="p-1 rounded hover:bg-void-bg-3 transition-colors"
-              title="Open settings"
-            >
-              <Settings size={14} />
-            </button>
-
-            {/* 5. Demo button - NEW ADDITION */}
-<button
-  onClick={() => {
-    // Set a placeholder transcript
-    const demoTranscript = "Hey Cody, can you explain how React hooks work and give me an example of useState?";
-    setCurrentTranscript(demoTranscript);
-    currentTranscriptRef.current = demoTranscript;
-
-    // Simulate turn_completed after 3 seconds
-    setTimeout(() => {
-      // Create a simulated app message event
-      const simulatedEvent: DailyEventObjectAppMessage = {
-        action: 'app-message',
-        fromId: 'demo', // Not 'local' so it won't be ignored
-        data: {
-          type: 'turn_completed',
-          content: ''
-        }
-      } as DailyEventObjectAppMessage;
-
-      // Call the handleAppMessage function
-      handleAppMessage(simulatedEvent);
-    }, 3000);
-  }}
-  className="p-1 rounded hover:bg-void-bg-3 transition-colors text-void-link-color"
-  title="Demo transcript"
->
-  <span className="text-xs font-medium">DEMO</span>
-</button>
-          </div>
-
-          {/* Right side - Call controls */}
-          <div className="flex items-center gap-1">
-            {/* 5. Mute button - only when connected */}
-            {isConnected && (
+              {/* 3. New chat button */}
               <button
-                onClick={toggleMute}
+                onClick={() => {commandService.executeCommand(VOID_CMD_SHIFT_L_ACTION_ID)}}
                 className="p-1 rounded hover:bg-void-bg-3 transition-colors"
-                title={isMuted ? 'Unmute' : 'Mute'}
+                title="New chat"
               >
-                {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                <Plus size={14} />
               </button>
-            )}
 
-            {/* 6. Connect/disconnect button */}
-            <button
-              onClick={isConnected ? disconnect : initializeCall}
-              disabled={isConnecting}
-              className={`p-1 rounded transition-colors ${
-                isConnected ? 'hover:bg-red-500/20 text-red-500' : 'hover:bg-green-500/20 text-green-500'
-              } disabled:opacity-50`}
-              title={isConnected ? 'Disconnect' : 'Connect'}
-            >
-              {isConnected ? <PhoneOff size={14} /> : <Phone size={14} />}
-            </button>
+              {/* 4. Settings button */}
+              <button
+                onClick={() => {
+                  commandService.executeCommand(VOID_OPEN_SETTINGS_ACTION_ID);
+                }}
+                className="p-1 rounded hover:bg-void-bg-3 transition-colors"
+                title="Open settings"
+              >
+                <Settings size={14} />
+              </button>
+            </div>
+
+            {/* Right side - Call controls */}
+            <div className="flex items-center gap-1">
+              {/* 5. Mute button - only when connected */}
+              {isConnected && (
+                <button
+                  onClick={toggleMute}
+                  className="p-1 rounded hover:bg-void-bg-3 transition-colors"
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                >
+                  {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+                </button>
+              )}
+
+              {/* 6. Connect/disconnect button */}
+              <button
+                onClick={isConnected ? disconnect : initializeCall}
+                disabled={isConnecting}
+                className={`p-1 rounded transition-colors ${
+                  isConnected ? 'hover:bg-red-500/20 text-red-500' : 'hover:bg-green-500/20 text-green-500'
+                } disabled:opacity-50`}
+                title={isConnected ? 'Disconnect' : 'Connect'}
+              >
+                {isConnected ? <PhoneOff size={14} /> : <Phone size={14} />}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Messages container - fills remaining space */}
-        <div className="w-full flex-1 overflow-hidden relative">
-          <div
-            ref={messagesContainerRef}
-            onScroll={handleScroll}
-            className="w-full h-full p-3 space-y-4 overflow-y-auto"
-            style={{
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'var(--void-border-2) transparent'
-            }}
-          >
-            {/* Enhanced scrollbar styles */}
-            <style>{`
-              .overflow-y-auto::-webkit-scrollbar {
-                width: 6px;
-              }
-              .overflow-y-auto::-webkit-scrollbar-track {
-                background: transparent;
-              }
-              .overflow-y-auto::-webkit-scrollbar-thumb {
-                background-color: var(--void-border-2);
-                border-radius: 3px;
-                transition: background-color 0.2s ease;
-              }
-              .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-                background-color: var(--void-border-1);
-              }
-            `}</style>
-            {/* Show most recent user message if available */}
-            {mostRecentUserMessage && (
-              <div className="voice-chat-user-wrapper">
-                {/* User message label - NOW OUTSIDE */}
-                <div className="text-void-fg-3 text-xs font-semibold mb-2" style={{
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  opacity: 0.8
-                }}>You</div>
+          {/* Messages container - fills remaining space */}
+          <div className="w-full flex-1 overflow-hidden relative">
+            <div
+              ref={messagesContainerRef}
+              onScroll={handleScroll}
+              className="w-full h-full p-3 space-y-4 overflow-y-auto"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'var(--void-border-2) transparent'
+              }}
+            >
+              {/* Enhanced scrollbar styles */}
+              <style>{`
+                .overflow-y-auto::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .overflow-y-auto::-webkit-scrollbar-track {
+                  background: transparent;
+                }
+                .overflow-y-auto::-webkit-scrollbar-thumb {
+                  background-color: var(--void-border-2);
+                  border-radius: 3px;
+                  transition: background-color 0.2s ease;
+                }
+                .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+                  background-color: var(--void-border-1);
+                }
+              `}</style>
+              {/* Show most recent user message if available */}
+              {mostRecentUserMessage && (
+                <div className="voice-chat-user-wrapper">
+                  {/* User message label - NOW OUTSIDE */}
+                  <div className="text-void-fg-3 text-xs font-semibold mb-2" style={{
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    opacity: 0.8
+                  }}>You</div>
 
-                {/* Message box */}
-                <div style={{
-                  background: 'var(--void-bg-1)',
-                  padding: '0.75rem',
-                  borderRadius: '0.5rem',
-                  border: '1px solid var(--void-border-3)',
-                  marginBottom: '1rem'
-                }}>
-                  {/* Selections with wrapping */}
-                  {mostRecentUserMessage.message.selections && mostRecentUserMessage.message.selections.length > 0 && (
-                    <div className="mb-2">
-                      <VoiceChatSelectedFilesWrapping
-                        selections={mostRecentUserMessage.message.selections}
-                      />
+                  {/* Message box */}
+                  <div style={{
+                    background: 'var(--void-bg-1)',
+                    padding: '0.75rem',
+                    borderRadius: '0.5rem',
+                    border: '1px solid var(--void-border-3)',
+                    marginBottom: '1rem'
+                  }}>
+                    {/* Selections with wrapping */}
+                    {mostRecentUserMessage.message.selections && mostRecentUserMessage.message.selections.length > 0 && (
+                      <div className="mb-2">
+                        <VoiceChatSelectedFilesWrapping
+                          selections={mostRecentUserMessage.message.selections}
+                        />
+                      </div>
+                    )}
+
+                    {/* User message content */}
+                    <div className="text-void-fg-2 whitespace-pre-wrap">
+                      {mostRecentUserMessage.message.displayContent}
                     </div>
-                  )}
-
-                  {/* User message content */}
-                  <div className="text-void-fg-2 whitespace-pre-wrap">
-                    {mostRecentUserMessage.message.displayContent}
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
 
-            {/* Show most recent assistant message (hide when thinking/loading) */}
-            {mostRecentAssistantMessage && !streamingMessage &&
-              !(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') &&
-              renderMessageContent(
-                mostRecentAssistantMessage.message,
-                mostRecentAssistantMessage.messageIdx,
-                false
-              )
-            }
+              {/* Show most recent assistant message (hide when thinking/loading) */}
+              {mostRecentAssistantMessage && !streamingMessage &&
+                !(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') &&
+                renderMessageContent(
+                  mostRecentAssistantMessage.message,
+                  mostRecentAssistantMessage.messageIdx,
+                  false
+                )
+              }
 
-            {/* Show streaming message if available */}
-            {streamingMessage && renderMessageContent(streamingMessage, -1, true)}
+              {/* Show streaming message if available */}
+              {streamingMessage && renderMessageContent(streamingMessage, -1, true)}
 
-            {/* Loading indicator - shows below the last message */}
-            {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') && !streamingMessage && (
-              <div className="flex items-center gap-2 text-void-fg-3 text-sm py-2">
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  border: '2px solid var(--void-border-2)',
-                  borderTopColor: 'var(--void-link-color)',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                <span>Thinking...</span>
-                <style>{`
-                  @keyframes spin {
-                    to { transform: rotate(360deg); }
-                  }
-                `}</style>
-              </div>
-            )}
-
-            {/* Tool request approval with full details */}
-            {latestToolRequest && (
-              <div className="mt-4 p-4 rounded border" style={{
-                background: 'linear-gradient(135deg, var(--void-bg-3) 0%, var(--void-bg-2-alt) 100%)',
-                borderColor: 'var(--void-border-2)',
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
-                transition: 'all 0.2s ease'
-              }}>
-                <div className="text-sm text-void-fg-2 mb-3 font-semibold flex items-center gap-2">
-                  <span style={{ fontSize: '1rem' }}>⚡</span>
-                  Tool approval required:
+              {/* Loading indicator - shows below the last message */}
+              {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') && !streamingMessage && (
+                <div className="flex items-center gap-2 text-void-fg-3 text-sm py-2">
+                  <div style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid var(--void-border-2)',
+                    borderTopColor: 'var(--void-link-color)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <span>Thinking...</span>
+                  <style>{`
+                    @keyframes spin {
+                      to { transform: rotate(360deg); }
+                    }
+                  `}</style>
                 </div>
-                {renderToolRequest(latestToolRequest.message, latestToolRequest.messageIdx)}
-              </div>
-            )}
+              )}
 
-            {/* Show message if no assistant messages */}
-            {!mostRecentAssistantMessage && !streamingMessage && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && (
-              <div
-                className="flex items-center justify-center text-void-fg-3 text-sm"
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '100%',
-                  textAlign: 'center'
+              {/* Tool request approval with full details */}
+              {latestToolRequest && (
+                <div className="mt-4 p-4 rounded border" style={{
+                  background: 'linear-gradient(135deg, var(--void-bg-3) 0%, var(--void-bg-2-alt) 100%)',
+                  borderColor: 'var(--void-border-2)',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <div className="text-sm text-void-fg-2 mb-3 font-semibold flex items-center gap-2">
+                    <span style={{ fontSize: '1rem' }}>⚡</span>
+                    Tool approval required:
+                  </div>
+                  {renderToolRequest(latestToolRequest.message, latestToolRequest.messageIdx)}
+                </div>
+              )}
+
+              {/* Show message if no assistant messages */}
+              {!mostRecentAssistantMessage && !streamingMessage && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && (
+                <div
+                  className="flex items-center justify-center text-void-fg-3 text-sm"
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '100%',
+                    textAlign: 'center'
+                  }}
+                >
+                  No assistant messages yet. Start sending a message by saying something with 'Cody Go' at the end.
+                </div>
+              )}
+            </div>
+            {/* Abort button - shows when LLM is running */}
+            {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle' || streamingMessage) && (
+              <button
+                onClick={async () => {
+                  const threadId = chatThreadsService.getCurrentThread().id;
+                  await chatThreadsService.abortRunning(threadId);
                 }}
+                className="absolute bottom-4 left-4 p-2 rounded-full transition-all"
+                style={{
+                  background: 'var(--void-bg-3)',
+                  border: '1px solid var(--void-border-2)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--void-bg-2)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--void-bg-3)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+                }}
+                title="Stop generation"
               >
-                No assistant messages yet. Start sending a message by saying something with 'Cody Execute' at the end.
-              </div>
+                <Square size={12} fill="currentColor" />
+              </button>
+            )}
+            {/* Scroll to bottom button - hide when streaming/loading */}
+            {isUserScrolling && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && !streamingMessage && (
+              <button
+                onClick={() => scrollToBottom()}
+                className="absolute bottom-4 right-4 p-2 rounded-full transition-all"
+                style={{
+                  background: 'var(--void-bg-3)',
+                  border: '1px solid var(--void-border-2)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--void-bg-2)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--void-bg-3)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+                }}
+                title="Scroll to bottom"
+              >
+                <ChevronDown size={16} />
+              </button>
             )}
           </div>
-          {/* Abort button - shows when LLM is running */}
-          {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle' || streamingMessage) && (
-            <button
-              onClick={async () => {
-                const threadId = chatThreadsService.getCurrentThread().id;
-                await chatThreadsService.abortRunning(threadId);
-              }}
-              className="absolute bottom-4 left-4 p-2 rounded-full transition-all"
-              style={{
-                background: 'var(--void-bg-3)',
-                border: '1px solid var(--void-border-2)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--void-bg-2)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--void-bg-3)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-              }}
-              title="Stop generation"
-            >
-              <Square size={12} fill="currentColor" />
-            </button>
-          )}
-          {/* Scroll to bottom button - hide when streaming/loading */}
-          {isUserScrolling && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && !streamingMessage && (
-            <button
-              onClick={() => scrollToBottom()}
-              className="absolute bottom-4 right-4 p-2 rounded-full transition-all"
-              style={{
-                background: 'var(--void-bg-3)',
-                border: '1px solid var(--void-border-2)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--void-bg-2)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--void-bg-3)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-              }}
-              title="Scroll to bottom"
-            >
-              <ChevronDown size={16} />
-            </button>
-          )}
-        </div>
 
 
-        {/* Live transcript display */}
-        {isConnected && (<TranscriptDisplay
-          transcript={currentTranscript}
-          setCurrentTranscript={setCurrentTranscript}
-          currentTranscriptRef={currentTranscriptRef}
-        />)}
-        {/* Staging selections - moved to bottom with horizontal scrolling */}
-        {selections && selections.length > 0 && (
-          <div className="border-t border-void-border-3 bg-void-bg-1">
-            <div className="px-3 py-2">
-              <div className="overflow-x-auto overflow-y-hidden" style={{ maxWidth: '100%' }}>
-                <VoiceChatSelectedFiles selections={selections} setSelections={setSelections} />
+          {/* Live transcript display */}
+          {isConnected && (<TranscriptDisplay
+            transcript={currentTranscript}
+            sendAppMessage={sendAppMessage}
+            setCurrentTranscript={setCurrentTranscript}
+            currentTranscriptRef={currentTranscriptRef}
+          />)}
+          {/* Staging selections - moved to bottom with horizontal scrolling */}
+          {selections && selections.length > 0 && (
+            <div className="border-t border-void-border-3 bg-void-bg-1">
+              <div className="px-3 py-2">
+                <div className="overflow-x-auto overflow-y-hidden" style={{ maxWidth: '100%' }}>
+                  <VoiceChatSelectedFiles selections={selections} setSelections={setSelections} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 };

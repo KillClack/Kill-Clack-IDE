@@ -18,9 +18,10 @@ import { timeout } from '../../../../base/common/async.js'
 import { RawToolParamsObj } from '../common/sendLLMMessageTypes.js'
 import { MAX_CHILDREN_URIs_PAGE, MAX_FILE_CHARS_PAGE, MAX_TERMINAL_BG_COMMAND_TIME, MAX_TERMINAL_INACTIVE_TIME } from '../common/prompt/prompts.js'
 import { IVoidSettingsService } from '../common/voidSettingsService.js'
+import { ICommandService } from '../../../../platform/commands/common/commands.js'
 import { generateUuid } from '../../../../base/common/uuid.js'
-
-
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js'
+import { ScrollType } from '../../../../editor/common/editorCommon.js'
 // tool use for AI
 type ValidateBuiltinParams = { [T in BuiltinToolName]: (p: RawToolParamsObj) => BuiltinToolCallParams[T] }
 type CallBuiltinTool = { [T in BuiltinToolName]: (p: BuiltinToolCallParams[T]) => Promise<{ result: BuiltinToolResultType[T] | Promise<BuiltinToolResultType[T]>, interruptTool?: () => void }> }
@@ -153,6 +154,8 @@ export class ToolsService implements IToolsService {
 		@IDirectoryStrService private readonly directoryStrService: IDirectoryStrService,
 		@IMarkerService private readonly markerService: IMarkerService,
 		@IVoidSettingsService private readonly voidSettingsService: IVoidSettingsService,
+		@ICommandService private readonly commandService: ICommandService,
+		@ICodeEditorService private readonly editorService: ICodeEditorService,
 	) {
 		const queryBuilder = instantiationService.createInstance(QueryBuilder);
 
@@ -303,6 +306,32 @@ export class ToolsService implements IToolsService {
 
 		this.callTool = {
 			go_to_location: async ({ uri, startLine, endLine }) => {
+				// Get editor selection from CodeSelection range
+				let editorSelection = undefined;
+				if (startLine && endLine) {
+					editorSelection = {
+						startLineNumber: startLine,
+						startColumn: 1,
+						endLineNumber: endLine,
+						endColumn: Number.MAX_SAFE_INTEGER,
+					};
+				}
+				// open the file
+				this.commandService.executeCommand('vscode.open', uri).then(() => {
+
+					// select the text
+					setTimeout(() => {
+						if (!editorSelection) return;
+
+						const editor = this.editorService.getActiveCodeEditor()
+						if (!editor) return;
+
+						editor.setSelection(editorSelection)
+						editor.revealRange(editorSelection, ScrollType.Immediate)
+
+					}, 50) // needed when document was just opened and needs to initialize
+
+				})
 				return { result: { uri, startLine, endLine } };
 			},
 			read_file: async ({ uri, startLine, endLine, pageNumber }) => {
