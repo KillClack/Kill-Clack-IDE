@@ -24,6 +24,7 @@ import { BuiltinToolName } from '../../../../common/toolsServiceTypes.js';
 import { isABuiltinToolName} from '../../../../common/prompt/prompts.js';
 import { VOICE_CHAT_VIEW_ID } from '../../../voiceChatPanel.js';
 import { ViewContainerLocation } from '../../../../../../common/views.js';
+import { ChatBubble } from '../sidebar-tsx/SidebarChat.js';
 import { VOID_OPEN_SETTINGS_ACTION_ID } from '../../../voidSettingsPane.js';
 import { VOID_CMD_SHIFT_L_ACTION_ID } from '../../../sidebarActions.js';
 import { useVoiceAgentStatus } from '../util/services.js';
@@ -323,7 +324,7 @@ const TranscriptDisplay = ({ transcript, setCurrentTranscript, sendAppMessage, c
         )}
       </div>
 
-      {/* Add keyframe animations */}
+      {/* Add animations */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 0.3; }
@@ -337,12 +338,35 @@ const TranscriptDisplay = ({ transcript, setCurrentTranscript, sendAppMessage, c
           from { opacity: 0; transform: translateX(-5px); }
           to { opacity: 1; transform: translateX(0); }
         }
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
       `}</style>
     </div>
   );
 };
 
 export const VoiceChat = () => {
+  const developmentModeRef = useRef<boolean>(true);
+
+  const [isCodyAsleep, setIsCodyAsleep] = useState(false);
+
   const accessor = useAccessor();
   const chatThreadsService = accessor.get('IChatThreadService');
   const commandService = accessor.get('ICommandService');
@@ -378,33 +402,13 @@ export const VoiceChat = () => {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollHeight = useRef<number>(0);
 
+  const currCheckpointIdx = chatThreadsState.allThreads[currentThread.id]?.state?.currCheckpointIdx ?? undefined;
+
   const keepAliveRef = useRef<{ status: string; lastTime: number }>({
     status: 'OK',
     lastTime: 0,
   });
 
-
-  // Get the most recent assistant message
-  const mostRecentAssistantMessage = useMemo(() => {
-    const assistantMessages = currentThread.messages.filter(msg => msg.role === 'assistant');
-    if (assistantMessages.length === 0) return null;
-
-    const lastMessage = assistantMessages[assistantMessages.length - 1];
-    const messageIdx = currentThread.messages.findLastIndex(msg => msg.role === 'assistant');
-
-    return { message: lastMessage, messageIdx };
-  }, [currentThread.messages]);
-
-  // Get the most recent user message
-  const mostRecentUserMessage = useMemo(() => {
-    const userMessages = currentThread.messages.filter(msg => msg.role === 'user');
-    if (userMessages.length === 0) return null;
-
-    const lastMessage = userMessages[userMessages.length - 1];
-    const messageIdx = currentThread.messages.findLastIndex(msg => msg.role === 'user');
-
-    return { message: lastMessage, messageIdx };
-  }, [currentThread.messages]);
 
   // Get streaming message if available
   const streamingMessage = useMemo(() => {
@@ -421,17 +425,6 @@ export const VoiceChat = () => {
 
     return null;
   }, [currThreadStreamState]);
-
-  // Get the latest tool request that needs approval
-  const latestToolRequest = useMemo(() => {
-    const toolMessages = currentThread.messages.filter(msg =>
-      msg.role === 'tool' && msg.type === 'tool_request'
-    );
-    return toolMessages.length > 0 ? {
-      message: toolMessages[toolMessages.length - 1] as ToolMessage<any>,
-      messageIdx: currentThread.messages.findLastIndex(msg => msg.role === 'tool' && msg.type === 'tool_request')
-    } : null;
-  }, [currentThread.messages]);
 
   // Auto-scroll to bottom function
   const scrollToBottom = useCallback((smooth = true) => {
@@ -478,78 +471,83 @@ export const VoiceChat = () => {
     }
 
     setIsConnecting(true);
+    let dailyRoomUrl = '';
+    let dailyRoomToken = undefined;
+    if (!developmentModeRef.current) {
+      // Generate unique room name
+      const roomName = `voice-chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      dailyRoomName.current = roomName;
+      dailyRoomUrl = `https://${settingsState.globalSettings.dailyRoomDomain}/${roomName}`;
 
-    // Generate unique room name
-    const roomName = `voice-chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    dailyRoomName.current = roomName;
-    const dailyRoomUrl = `https://${settingsState.globalSettings.dailyRoomDomain}/${roomName}`;
+      // Create the room
+      const headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+      };
+      const roomPayload = {
+          name: roomName,
+          privacy: 'private',
+          properties: {
+              start_video_off: true,
+          },
+      };
 
-    // Create the room
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${settingsState.globalSettings.dailyApiKey}`,
-    };
-    const roomPayload = {
-        name: roomName,
-        privacy: 'private',
-        properties: {
-            start_video_off: true,
-        },
-    };
+      try {
+          await fetch('https://api.daily.co/v1/rooms/', {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify(roomPayload),
+          });
+      } catch (error) {
+          console.error('Failed to create Daily room:', error);
+          setIsConnecting(false);
+          notificationService.notify({
+              severity: Severity.Error,
+              message: 'Failed to create voice chat room'
+          });
+          return;
+      }
 
-    try {
-        await fetch('https://api.daily.co/v1/rooms/', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(roomPayload),
-        });
-    } catch (error) {
-        console.error('Failed to create Daily room:', error);
-        setIsConnecting(false);
-        notificationService.notify({
-            severity: Severity.Error,
-            message: 'Failed to create voice chat room'
-        });
-        return;
+      // Create access token
+      const tokenPayload = {
+          properties: {
+              room_name: roomName,
+              permissions: {
+                  canAdmin: ['participants'],
+                  canSend: true,
+              },
+          },
+      };
+      try {
+          const tokenResponse = await fetch('https://api.daily.co/v1/meeting-tokens/', {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify(tokenPayload),
+          });
+          const tokenData = await tokenResponse.json();
+          dailyRoomToken = tokenData.token;
+      } catch (error) {
+          console.error('Failed to create Daily access token:', error);
+          setIsConnecting(false);
+          notificationService.notify({
+              severity: Severity.Error,
+              message: 'Failed to create access token'
+          });
+          return;
+      }
+    } else {
+      dailyRoomUrl = 'https://victordev.daily.co/sample'
     }
 
-    // Create access token
-    const tokenPayload = {
-        properties: {
-            room_name: roomName,
-            permissions: {
-                canAdmin: ['participants'],
-                canSend: true,
-            },
-        },
-    };
-
-    let dailyRoomToken;
     try {
-        const tokenResponse = await fetch('https://api.daily.co/v1/meeting-tokens/', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(tokenPayload),
+      if (!developmentModeRef.current) {
+        // Start voice agent first
+        await voiceAgentService.startVoiceAgent({
+            dailyRoomUrl: dailyRoomUrl,
+            dailyRoomToken: dailyRoomToken,
+            deepgramApiKey: settingsState.globalSettings.deepgramApiKey
         });
-        const tokenData = await tokenResponse.json();
-        dailyRoomToken = tokenData.token;
-    } catch (error) {
-        console.error('Failed to create Daily access token:', error);
-        setIsConnecting(false);
-        notificationService.notify({
-            severity: Severity.Error,
-            message: 'Failed to create access token'
-        });
-        return;
-    }
-
-    try {
-      // Start voice agent first
-      await voiceAgentService.startVoiceAgent({
-          dailyRoomUrl: dailyRoomUrl,
-          dailyRoomToken: dailyRoomToken,
-          deepgramApiKey: settingsState.globalSettings.deepgramApiKey
-      });
+      }
       // Create call object similar to PropertyChat
       const newCallObject: DailyCall = (DailyIframe as any).createCallObject({
         dailyConfig: {
@@ -578,8 +576,10 @@ export const VoiceChat = () => {
           url: dailyRoomUrl,
           userName: "User",
           videoSource: false,
-          token: dailyRoomToken,
       };
+      if (dailyRoomToken) {
+        joinParams.token = dailyRoomToken;
+      }
 
       // Join with the configured settings
       await newCallObject.join(joinParams);
@@ -600,6 +600,18 @@ export const VoiceChat = () => {
 
     const messageType = event.data?.type;
     const content = event.data?.content;
+
+    // Handle activate/deactivate messages
+    if (messageType === 'deactivate') {
+      setIsCodyAsleep(true);
+    }
+
+    if (messageType === 'activate') {
+      setIsCodyAsleep(false);
+      // Force open the voice chat panel
+      paneCompositeService.openPaneComposite(VOICE_CHAT_VIEW_ID, ViewContainerLocation.Panel, true)
+        .catch(console.error);
+    }
 
     // Handle transcript updates
     if (messageType === 'latest_transcript') {
@@ -647,7 +659,7 @@ export const VoiceChat = () => {
         lastTime: Date.now(),
       };
     }
-  }, [currThreadStreamState, chatThreadsService]);
+  }, [currThreadStreamState, chatThreadsService, isCodyAsleep]);
 
   // Join meeting handler
   const joinMeeting = useCallback(async () => {
@@ -703,33 +715,28 @@ export const VoiceChat = () => {
       callObject.off('left-meeting', leftMeeting);
       callObject.off('network-connection', handleNetworkConnection);
     };
-  }, [callObject, handleAppMessage, joinMeeting, leftMeeting, handleNetworkConnection]);
+  }, [callObject, handleAppMessage, joinMeeting, leftMeeting, handleNetworkConnection, isCodyAsleep]);
 
-  // Detect content changes and scroll to bottom
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    // Check if content height changed
     if (container.scrollHeight !== lastScrollHeight.current) {
       lastScrollHeight.current = container.scrollHeight;
 
-      // Always auto-scroll if streaming or loading
       const isStreamingOrLoading = streamingMessage || currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle';
 
-      // Auto-scroll if user isn't manually scrolling OR if streaming/loading
       if (!isUserScrolling || isStreamingOrLoading) {
         scrollToBottom();
       }
     }
   }, [
-    mostRecentAssistantMessage,
+    currentThread.messages, // Watch all messages instead of just recent ones
     streamingMessage,
-    latestToolRequest,
     scrollToBottom,
     isUserScrolling,
+    currThreadStreamState?.isRunning
   ]);
-
   // Handle parent resize events
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -769,21 +776,23 @@ export const VoiceChat = () => {
       callObjectRef.current = null;
       setIsConnected(false);
       setParticipants({});
-      // Stop voice agent
-      await voiceAgentService.stopVoiceAgent();
-      // Delete the room
-      if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
-        const headers = {
-            Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
-        };
-        try {
-            await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
-                  method: 'DELETE',
-                  headers: headers,
-              });
-          } catch (error) {
-              console.error('Error deleting Daily room:', error);
-          }
+      if (!developmentModeRef.current) {
+        // Stop voice agent
+        await voiceAgentService.stopVoiceAgent();
+        // Delete the room
+        if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
+          const headers = {
+              Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+          };
+          try {
+              await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
+                    method: 'DELETE',
+                    headers: headers,
+                });
+            } catch (error) {
+                console.error('Error deleting Daily room:', error);
+            }
+        }
       }
     } catch (error) {
       console.error('Error disconnecting:', error);
@@ -802,145 +811,30 @@ export const VoiceChat = () => {
                     console.error('Cleanup error:', error);
                 }
             }
-            // Delete the room
-            if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
-              const headers = {
-                  Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
-              };
-              try {
-                  await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
-                        method: 'DELETE',
-                        headers: headers,
-                    });
-                } catch (error) {
-                    console.error('Error deleting Daily room:', error);
-                }
+            if (!developmentModeRef.current) {
+              // Delete the room
+              if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
+                const headers = {
+                    Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+                };
+                try {
+                    await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
+                          method: 'DELETE',
+                          headers: headers,
+                      });
+                  } catch (error) {
+                      console.error('Error deleting Daily room:', error);
+                  }
+              }
+              // Stop voice agent on unmount
+              await voiceAgentService.stopVoiceAgent();
             }
-            // Stop voice agent on unmount
-            await voiceAgentService.stopVoiceAgent();
         };
         cleanup().catch(console.error);
     };
 }, [voiceAgentService, settingsState.globalSettings.dailyApiKey]);
 
-  // Render the message content with proper styling
-  const renderMessageContent = (messageToRender: ChatMessage & { role: 'assistant' }, messageIdx: number, isStreaming: boolean = false) => {
-    const chatMessageLocation: ChatMessageLocation = {
-      threadId: currentThread.id,
-      messageIdx: messageIdx,
-    };
 
-    return (
-      <div
-        className={`voice-chat-message ${isStreaming ? 'streaming' : ''}`}
-        style={{
-          animation: 'fadeInUp 0.3s ease-out',
-          position: 'relative'
-        }}
-      >
-        <div className="text-void-fg-3 text-xs font-semibold mb-2" style={{
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          opacity: 0.8
-        }}>Cody</div>
-        {/* Reasoning */}
-        {messageToRender.reasoning && (
-          <div className="voice-chat-reasoning" style={{
-            padding: '0.75rem',
-            background: 'linear-gradient(135deg, var(--void-bg-3) 0%, var(--void-bg-2-alt) 100%)',
-            borderRadius: '0.5rem',
-            borderLeft: '3px solid var(--void-link-color)',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-            transition: 'all 0.2s ease'
-          }}>
-            <div className="text-void-fg-3 mb-2" style={{
-              fontWeight: 600,
-              letterSpacing: '0.5px',
-              textTransform: 'uppercase',
-              fontSize: '0.7rem',
-              opacity: 0.8
-            }}>Reasoning</div>
-            <div className="text-void-fg-4 text-sm prose prose-sm break-words max-w-none">
-              <ChatMarkdownRender
-                string={messageToRender.reasoning}
-                chatMessageLocation={chatMessageLocation}
-                isApplyEnabled={false}
-                isLinkDetectionEnabled={true}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Main content */}
-        {messageToRender.displayContent && (
-          <div className="voice-chat-content" style={{
-            lineHeight: '1.6',
-            // Add these styles for background:
-            background: 'var(--void-bg-1)', // or use a gradient like below
-            // background: 'linear-gradient(135deg, var(--void-bg-1) 0%, var(--void-bg-2) 100%)',
-            padding: '1rem',
-            borderRadius: '0.5rem',
-            border: '1px solid var(--void-border-3)',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
-          }}>
-            <div className="text-void-fg-2 prose prose-sm break-words max-w-none" style={{ fontSize: '0.9rem' }}>
-              <ChatMarkdownRender
-                string={messageToRender.displayContent}
-                chatMessageLocation={chatMessageLocation}
-                isApplyEnabled={true}
-                isLinkDetectionEnabled={true}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Add keyframe animations */}
-        <style>{`
-          @keyframes fadeInUp {
-            from {
-              opacity: 0;
-              transform: translateY(10px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          .voice-chat-reasoning:hover {
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-            transform: translateX(2px);
-          }
-        `}</style>
-      </div>
-    );
-  };
-
-  // Render tool request with full details (same logic as SidebarChat)
-  const renderToolRequest = (toolMessage: ToolMessage<any>, messageIdx: number) => {
-    const toolName = toolMessage.name;
-    const isBuiltInTool = isABuiltinToolName(toolName);
-    const ToolResultWrapper = isBuiltInTool
-      ? builtinToolNameToComponent[toolName as BuiltinToolName]?.resultWrapper as any
-      : MCPToolWrapper as any;
-
-    if (!ToolResultWrapper) return null;
-
-    return (
-      <div className="space-y-2">
-        {/* Show the tool request details using the same wrapper as SidebarChat */}
-        <ToolResultWrapper
-          toolMessage={toolMessage}
-          messageIdx={messageIdx}
-          threadId={currentThread.id}
-        />
-
-        {/* Show the accept/reject buttons */}
-        <div className="flex justify-center">
-          <ToolRequestAcceptRejectButtons toolName={toolName} />
-        </div>
-      </div>
-    );
-  };
 
   // Listen to status changes
   useEffect(() => {
@@ -969,6 +863,7 @@ export const VoiceChat = () => {
               {/* Status indicator */}
               <div className="flex items-center gap-1">
                 <div className={`w-2 h-2 rounded-full ${
+                  isCodyAsleep ? 'bg-gray-400' :
                   isConnected ? 'bg-green-500' :
                   isConnecting ? 'bg-yellow-500 animate-pulse' :
                   'bg-gray-500'
@@ -978,8 +873,18 @@ export const VoiceChat = () => {
 
               {/* Connection status */}
               <span className="text-void-fg-3">
-                {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
+                {isCodyAsleep ? 'Sleeping' :
+                isConnected ? 'Connected' :
+                isConnecting ? 'Connecting...' :
+                'Disconnected'}
               </span>
+
+              {/* Sleeping indicator with pulsing Zzz */}
+              {isCodyAsleep && (
+                <span className="text-void-fg-4 text-xs animate-pulse">
+                  💤
+                </span>
+              )}
             </div>
 
             {/* Middle - General controls */}
@@ -1040,6 +945,35 @@ export const VoiceChat = () => {
 
           {/* Messages container - fills remaining space */}
           <div className="w-full flex-1 overflow-hidden relative">
+            {/* Sleep overlay */}
+            {isCodyAsleep && isConnected && (
+              <div
+                className="absolute inset-0 z-10 flex items-center justify-center"
+                style={{
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  backdropFilter: 'blur(2px)'
+                }}
+              >
+                <div className="text-center p-6 rounded-lg max-w-sm"
+                  style={{
+                    background: 'var(--void-bg-2)',
+                    border: '1px solid var(--void-border-2)',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+                  }}
+                >
+                  {/* Animated sleeping icon */}
+                  <div className="text-6xl mb-4" style={{ animation: 'float 3s ease-in-out infinite' }}>
+                    😴
+                  </div>
+                  <h3 className="text-void-fg-1 text-lg font-semibold mb-2">
+                    Cody is asleep
+                  </h3>
+                  <p className="text-void-fg-3 text-sm">
+                    Say "Hey there Cody" to wake him up
+                  </p>
+                </div>
+              </div>
+            )}
             <div
               ref={messagesContainerRef}
               onScroll={handleScroll}
@@ -1049,73 +983,40 @@ export const VoiceChat = () => {
                 scrollbarColor: 'var(--void-border-2) transparent'
               }}
             >
-              {/* Enhanced scrollbar styles */}
-              <style>{`
-                .overflow-y-auto::-webkit-scrollbar {
-                  width: 6px;
-                }
-                .overflow-y-auto::-webkit-scrollbar-track {
-                  background: transparent;
-                }
-                .overflow-y-auto::-webkit-scrollbar-thumb {
-                  background-color: var(--void-border-2);
-                  border-radius: 3px;
-                  transition: background-color 0.2s ease;
-                }
-                .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-                  background-color: var(--void-border-1);
-                }
-              `}</style>
-              {/* Show most recent user message if available */}
-              {mostRecentUserMessage && (
-                <div className="voice-chat-user-wrapper">
-                  {/* User message label - NOW OUTSIDE */}
-                  <div className="text-void-fg-3 text-xs font-semibold mb-2" style={{
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    opacity: 0.8
-                  }}>You</div>
-
-                  {/* Message box */}
-                  <div style={{
-                    background: 'var(--void-bg-1)',
-                    padding: '0.75rem',
-                    borderRadius: '0.5rem',
-                    border: '1px solid var(--void-border-3)',
-                    marginBottom: '1rem'
-                  }}>
-                    {/* Selections with wrapping */}
-                    {mostRecentUserMessage.message.selections && mostRecentUserMessage.message.selections.length > 0 && (
-                      <div className="mb-2">
-                        <VoiceChatSelectedFilesWrapping
-                          selections={mostRecentUserMessage.message.selections}
-                        />
-                      </div>
-                    )}
-
-                    {/* User message content */}
-                    <div className="text-void-fg-2 whitespace-pre-wrap">
-                      {mostRecentUserMessage.message.displayContent}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-
-              {/* Show most recent assistant message (hide when thinking/loading) */}
-              {mostRecentAssistantMessage && !streamingMessage &&
-                !(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') &&
-                renderMessageContent(
-                  mostRecentAssistantMessage.message,
-                  mostRecentAssistantMessage.messageIdx,
-                  false
-                )
-              }
+              {/* Render all previous messages like SidebarChat does */}
+              {currentThread.messages.map((message, i) => {
+                return <ChatBubble
+                  key={i}
+                  currCheckpointIdx={currCheckpointIdx}
+                  chatMessage={message}
+                  messageIdx={i}
+                  isCommitted={true}
+                  chatIsRunning={currThreadStreamState?.isRunning}
+                  threadId={currentThread.id}
+                  _scrollToBottom={() => scrollToBottom()}
+                />
+              })}
 
               {/* Show streaming message if available */}
-              {streamingMessage && renderMessageContent(streamingMessage, -1, true)}
+              {streamingMessage && (
+                <ChatBubble
+                  key={'curr-streaming-msg'}
+                  currCheckpointIdx={currCheckpointIdx}
+                  chatMessage={{
+                    role: 'assistant',
+                    displayContent: streamingMessage.displayContent ?? '',
+                    reasoning: streamingMessage.reasoning ?? '',
+                    anthropicReasoning: null,
+                  }}
+                  messageIdx={currentThread.messages.length}
+                  isCommitted={false}
+                  chatIsRunning={currThreadStreamState?.isRunning}
+                  threadId={currentThread.id}
+                  _scrollToBottom={null}
+                />
+              )}
 
-              {/* Loading indicator - shows below the last message */}
+              {/* Loading indicator */}
               {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle') && !streamingMessage && (
                 <div className="flex items-center gap-2 text-void-fg-3 text-sm py-2">
                   <div style={{
@@ -1135,24 +1036,8 @@ export const VoiceChat = () => {
                 </div>
               )}
 
-              {/* Tool request approval with full details */}
-              {latestToolRequest && (
-                <div className="mt-4 p-4 rounded border" style={{
-                  background: 'linear-gradient(135deg, var(--void-bg-3) 0%, var(--void-bg-2-alt) 100%)',
-                  borderColor: 'var(--void-border-2)',
-                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
-                  transition: 'all 0.2s ease'
-                }}>
-                  <div className="text-sm text-void-fg-2 mb-3 font-semibold flex items-center gap-2">
-                    <span style={{ fontSize: '1rem' }}>⚡</span>
-                    Tool approval required:
-                  </div>
-                  {renderToolRequest(latestToolRequest.message, latestToolRequest.messageIdx)}
-                </div>
-              )}
-
-              {/* Show message if no assistant messages */}
-              {!mostRecentAssistantMessage && !streamingMessage && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && (
+              {/* Show empty state if no messages */}
+              {currentThread.messages.length === 0 && !streamingMessage && currThreadStreamState?.isRunning !== 'LLM' && currThreadStreamState?.isRunning !== 'idle' && (
                 <div
                   className="flex items-center justify-center text-void-fg-3 text-sm"
                   style={{
@@ -1168,6 +1053,7 @@ export const VoiceChat = () => {
                 </div>
               )}
             </div>
+
             {/* Abort button - shows when LLM is running */}
             {(currThreadStreamState?.isRunning === 'LLM' || currThreadStreamState?.isRunning === 'idle' || streamingMessage) && (
               <button
@@ -1226,13 +1112,15 @@ export const VoiceChat = () => {
           </div>
 
 
-          {/* Live transcript display */}
-          {isConnected && (<TranscriptDisplay
-            transcript={currentTranscript}
-            sendAppMessage={sendAppMessage}
-            setCurrentTranscript={setCurrentTranscript}
-            currentTranscriptRef={currentTranscriptRef}
-          />)}
+          {/* Live transcript display - only show when connected and awake */}
+          {isConnected && !isCodyAsleep && (
+            <TranscriptDisplay
+              transcript={currentTranscript}
+              sendAppMessage={sendAppMessage}
+              setCurrentTranscript={setCurrentTranscript}
+              currentTranscriptRef={currentTranscriptRef}
+            />
+          )}
           {/* Staging selections - moved to bottom with horizontal scrolling */}
           {selections && selections.length > 0 && (
             <div className="border-t border-void-border-3 bg-void-bg-1">
