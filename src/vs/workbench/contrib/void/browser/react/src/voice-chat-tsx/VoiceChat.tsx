@@ -767,6 +767,7 @@ export const VoiceChat = () => {
   // Disconnect
   const disconnect = useCallback(async () => {
     if (!callObject) return;
+    setIsCodyAsleep(false);
 
     try {
 
