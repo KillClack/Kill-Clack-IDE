@@ -674,7 +674,7 @@ const VoidOnboardingContent = () => {
 									value={voidSettingsState.globalSettings.dailyRoomDomain || ''}
 									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('dailyRoomDomain', newVal)}
 									placeholder="your-company.daily.co"
-									passwordBlur={true}
+									passwordBlur={false}
 									compact={true}
 								/>
 							</ErrorBoundary>
@@ -697,8 +697,8 @@ const VoidOnboardingContent = () => {
 								<VoidSimpleInputBox
 									value={voidSettingsState.globalSettings.deepgramApiKey || ''}
 									onChangeValue={(newVal) => voidSettingsService.setGlobalSetting('deepgramApiKey', newVal)}
-									placeholder="sk_... (leave empty for public rooms)"
-									passwordBlur={true}
+									placeholder="sk_..."
+									passwordBlur={false}
 									compact={true}
 								/>
 							</ErrorBoundary>
