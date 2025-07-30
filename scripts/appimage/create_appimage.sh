@@ -104,7 +104,7 @@ cd /app && \
 rm -rf VoidApp.AppDir && \
 mkdir -p VoidApp.AppDir/usr/bin VoidApp.AppDir/usr/lib VoidApp.AppDir/usr/share/applications && \
 find . -maxdepth 1 ! -name VoidApp.AppDir ! -name "." ! -name ".." -exec cp -r {} VoidApp.AppDir/usr/bin/ \; && \
-cp void.png VoidApp.AppDir/ && \
+cp logoblackkillclack.png VoidApp.AppDir/ && \
 echo "[Desktop Entry]" > VoidApp.AppDir/void.desktop && \
 echo "Name=Void" >> VoidApp.AppDir/void.desktop && \
 echo "Comment=Open source AI code editor." >> VoidApp.AppDir/void.desktop && \

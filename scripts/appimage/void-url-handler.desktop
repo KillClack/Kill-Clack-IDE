@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Void - URL Handler
+Name=Killclack - URL Handler
 Comment=Open source AI code editor.
 GenericName=Text Editor
 Exec=void --open-url %U

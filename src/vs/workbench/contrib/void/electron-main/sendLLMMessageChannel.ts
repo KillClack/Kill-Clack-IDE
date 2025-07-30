@@ -81,7 +81,7 @@ export class LLMMessageChannel implements IServerChannel {
 				this._callOpenAICompatibleList(params)
 			}
 			else {
-				throw new Error(`Void sendLLM: command "${command}" not recognized.`)
+				throw new Error(`Killclack sendLLM: command "${command}" not recognized.`)
 			}
 		}
 		catch (e) {

@@ -191,7 +191,7 @@ ${telemetryText}
 
 ${restartString}
 
-Void separately records basic usage like the number of messages people are sending. If you'd like to disable Void metrics, you may do so in Void's Settings.
+Killclack separately records basic usage like the number of messages people are sending. If you'd like to disable Killclack metrics, you may do so in Killclack's Settings.
 `;
 
 	return telemetryDescription;

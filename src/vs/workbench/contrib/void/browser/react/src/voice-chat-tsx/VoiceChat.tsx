@@ -363,7 +363,7 @@ const TranscriptDisplay = ({ transcript, setCurrentTranscript, sendAppMessage, c
 };
 
 export const VoiceChat = () => {
-  const developmentModeRef = useRef<boolean>(true);
+  const developmentModeRef = useRef<boolean>(false);
 
   const [isCodyAsleep, setIsCodyAsleep] = useState(false);
 
