@@ -661,6 +661,42 @@ export const VoiceChat = () => {
     }
   }, [currThreadStreamState, chatThreadsService, isCodyAsleep]);
 
+  // Disconnect
+  const disconnect = useCallback(async () => {
+    if (!callObject) return;
+
+    try {
+
+      await callObject.leave();
+      await callObject.destroy();
+      setCallObject(null);
+      callObjectRef.current = null;
+      setParticipants({});
+      if (!developmentModeRef.current) {
+        // Stop voice agent
+        await voiceAgentService.stopVoiceAgent();
+        // Delete the room
+        if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
+          const headers = {
+              Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
+          };
+          try {
+              await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
+                    method: 'DELETE',
+                    headers: headers,
+                });
+            } catch (error) {
+                console.error('Error deleting Daily room:', error);
+            }
+        }
+      }
+      setIsCodyAsleep(false);
+      setIsConnected(false);
+    } catch (error) {
+      console.error('Error disconnecting:', error);
+    }
+  }, [callObject, settingsState.globalSettings.dailyApiKey]);
+
   // Join meeting handler
   const joinMeeting = useCallback(async () => {
     console.log('Joined meeting successfully');
@@ -668,8 +704,7 @@ export const VoiceChat = () => {
 
   // Left meeting handler
   const leftMeeting = useCallback(() => {
-    setIsConnected(false);
-    console.log('Left meeting');
+    disconnect();
   }, []);
 
   // Participant joined handler (AI agent joined)
@@ -763,42 +798,6 @@ export const VoiceChat = () => {
     callObject.setLocalAudio(!newMutedState);
     setIsMuted(newMutedState);
   }, [callObject, isMuted]);
-
-  // Disconnect
-  const disconnect = useCallback(async () => {
-    if (!callObject) return;
-    setIsCodyAsleep(false);
-
-    try {
-
-      await callObject.leave();
-      await callObject.destroy();
-      setCallObject(null);
-      callObjectRef.current = null;
-      setIsConnected(false);
-      setParticipants({});
-      if (!developmentModeRef.current) {
-        // Stop voice agent
-        await voiceAgentService.stopVoiceAgent();
-        // Delete the room
-        if (dailyRoomName.current && settingsState.globalSettings.dailyApiKey) {
-          const headers = {
-              Authorization: `Bearer ${settingsState.globalSettings.dailyApiKey}`,
-          };
-          try {
-              await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName.current}`, {
-                    method: 'DELETE',
-                    headers: headers,
-                });
-            } catch (error) {
-                console.error('Error deleting Daily room:', error);
-            }
-        }
-      }
-    } catch (error) {
-      console.error('Error disconnecting:', error);
-    }
-  }, [callObject, settingsState.globalSettings.dailyApiKey]);
 
   // Cleanup on unmount
   useEffect(() => {
