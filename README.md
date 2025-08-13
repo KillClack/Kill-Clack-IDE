@@ -41,12 +41,82 @@ We believe coding should be as natural as conversation.
 
 ## Getting Started
 
-See the [INSTALL.md](INSTALL.md) for platform-specific setup (including Google Drive/GitHub repo ZIP download instructions and Docker requirements), or simply:
+See the [INSTALL GUIDE](https://docs.google.com/document/d/1M6StW-ba2Vspg0ttRVIaLyX0J_vbPFxLXfXaYY9x7oA/edit?usp=sharing) for platform-specific setup (including Google Drive/GitHub repo ZIP download instructions and Docker requirements), or simply:
 
-1. Install dependencies (Node.js, Docker etc.)
-2. Launch Killclack
-3. Open a folder or codebase, or pull in your coding challenge repo
-4. Click the mic and start creating—hands-free!
+## 🚀 Quick Start
+
+1. **Install Killclack**
+   - [Download Killclack](https://github.com/KillClack/Kill-Clack-IDE) for your platform and install following the setup guide, or build from source.
+
+2. **Set Up Your API Keys & Voice Collaboration**
+   - Go to the **Settings** or **Voice** section inside Killclack.
+   - **LLM API Key:** Enter your preferred LLM or AI provider’s API key if required (e.g. OpenAI, Azure, etc).
+   - **Deepgram API Key:** Enter your Deepgram API key.  
+     Don’t have one? Get a free account at [Deepgram Console](https://console.deepgram.com/signup).
+   - **Daily.co (Voice/Video Collaboration):**
+     - Enter your [Daily API key](https://dashboard.daily.co/) and paste a valid **Daily room URL** if you want to use collaborative rooms (for pair programming with live transcription & chat).
+
+3. **Open a Project**
+   - Launch the Killclack app.
+   - Go to **File → Open Folder...** and select your coding repository (from GitHub, Google Drive, ZIP, etc).
+
+4. **Enable Your Microphone**
+   - When prompted, allow Killclack (Void/VS Code) to access your microphone.
+   - If you’re not prompted, go to your Mac’s **System Settings → Privacy & Security → Microphone** and ensure Killclack is checked.
+
+6. **Connect Voice Agent (First-Time Only)**
+   - Make sure Docker Desktop is installed and actively running before starting voice features.
+   - Killclack will automatically launch a secure Docker container for real-time speech and voice agent AI.
+
+7. **Start Voice Control**
+   - You’ll see a a tab labeled "voice" in the bottom 'toggle bar'.
+   - If you dont see the bottom toggle panel with differnt tabs including terminal and voice, enable it by clicking the icon for bottom toggle panel (bottom bar) on the top right hand corner of the IDE. (Small rectagle on bottome of larger rectangle icon)
+   - Once you are on the voice tab, click the green telephone in the panel to connect to Kill Clacks Cody voice agent.
+   - Click to start listening, or simply use a wake word.
+
+8. **Use Wake Words & Hands-Free Voice Commands**
+   - **Hey there Cody** — Wake up Killclack (activate voice control)
+   - **CodyGo** — Process your current request/command (“done with request”)
+   - **CodySleep** — Pause/sleep voice agent (stop listening)
+
+9. **Examples of What You Can Say**
+   - “Open file README.md”
+   - “Search for TODOs”
+   - “Create a new Python file”
+   - “Run the build task”
+   - Or say code directly: “Print hello world in JavaScript”
+   - To join a Daily room: “Join the team room”
+
+10. **End/Restart Voice Mode**
+   - Click the microphone icon to pause/resume listening.
+   - Say “CodySleep” to pause at any time; say “Hey there Cody” to reactivate.
+
+11. **(Optional) Pair Programming & Voice Rooms**
+    - With valid Daily credentials, join or invite teammates to live voice/code rooms with hands-free, transcribed collaboration.
+
+---
+
+### **Tips**
+- You can use all VS Code features alongside voice commands.
+- Wake words = ultimate hands-free workflow.
+- Privacy respected: all processing happens securely, using your keys.
+
+---
+
+### Troubleshooting
+
+- **Voice not working?**  
+  Docker Desktop must be running! Check for the whale icon in your system tray/menu bar.
+- **Mic not working?**  
+  Check your OS permissions:  
+  System Settings → Privacy & Security → Microphone → enable Killclack.
+- **No response to wake words?**  
+  Make sure the mic is active (icon is listening) and you speak clearly.
+- **For logs, settings, key reconfiguration:** Use Killclack’s settings menu.
+
+---
+
+Now you’re ready to code by voice—just say “Hey there Cody” and begin!
 
 ---
 
@@ -90,4 +160,4 @@ Work is temporarily paused on the original Void IDE (the parent repo) while the 
 
 
 
-You can always reach us in our Discord server or contact us via email: hello@voideditor.com.
+You can always reach us in our Discord server or contact us via email: hello@killclack.dev.
