@@ -4,7 +4,7 @@
 
 ## Context & Purpose
 
-Built as an open-source voice pored alternative to Cursor for AI-powered codebase exploration and editing, Killclack extends the mission: to kickstart a movement away from keyboard-centric workflows, making code accessible through natural, spoken language. Our vision is to empower everyone—from seasoned developers to code newcomers—to create, command, and collaborate by voice.
+Built as an open-source voice powered alternative to Cursor for AI-powered codebase exploration and editing, Killclack extends the mission: to kickstart a movement away from keyboard-centric workflows, making code accessible through natural, spoken language. Our vision is to empower everyone—from seasoned developers to code newcomers—to create, command, and collaborate by voice.
 
 We believe coding should be as natural as conversation.
 
