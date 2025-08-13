@@ -11,6 +11,14 @@ We believe coding should be as natural as conversation.
 **Join the movement to kill the keyboard, starting with code!**
 
 ---
+## Use KillClack just like you would VS Code for editing, navigating, and managing your codebase — but now with:
+ 
+ - Voice Commands for quick navigation, edits, and running tasks.
+ - Side Chat for asking explanations, generating code, or executing quick actions.
+ - Faster context switching without needing to move hands from the keyboard/mouse.
+ - The ability to combine typing + voice to work however is most efficient.
+   
+Think of it as VS Code + a fully integrated coding assistant that can hear you, understand your repo, and act instantly.
 
 ## Key Features & Functionality
 
