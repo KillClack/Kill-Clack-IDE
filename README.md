@@ -1,12 +1,5 @@
 # Killclack: Join the Movement to Kill the Keyboard
-<div align="center">
-	<img
-		src="Contents/Resources/app/assets/killclack-welcome.png"
-	 	alt="KillClack Welcome"
-		width="300"
-	 	height="300"
-	/>
-	
+
 </div>Killclack is an open-source, next-generation coding environment—built from Void (a fork of VS Code)—with a revolutionary twist: full AI-driven, real-time voice interaction.
 
 ## Context & Purpose
