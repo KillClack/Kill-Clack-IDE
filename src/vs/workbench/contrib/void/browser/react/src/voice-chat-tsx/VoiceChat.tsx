@@ -536,7 +536,7 @@ export const VoiceChat = () => {
           return;
       }
     } else {
-      dailyRoomUrl = 'https://victordev.daily.co/sample'
+      dailyRoomUrl = 'https://killclack.daily.co/sample'
     }
 
     try {
